@@ -58,3 +58,7 @@ c3c build asteroids_windows
 | Escape | Quit |
 | P | Pause |
 | C | Cheat mode |
+
+#### Notes
+
+This needs https://github.com/c3lang/c3c/issues/3040 to build and adding `import libc;` to c3 stdlib  `lib/std/threads/os/thread_none.c3`
