@@ -1,0 +1,156 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Linux Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev \
+            wayland-protocols \
+            libwayland-bin \
+            libx11-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxext-dev \
+            libxkbcommon-dev \
+            mingw-w64
+
+      - name: Install C3 Compiler
+        run: |
+          curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-linux.tar.gz | tar xz
+          echo "$(pwd)/c3" >> $GITHUB_PATH
+          chmod +x c3/c3c
+          # Hotfix for std::threads::os::thread_none (missing libc import for Web)
+          sed -i '/^module std::thread::os/a import libc;' c3/lib/std/threads/os/thread_none.c3
+
+      # - name: Setup Emscripten
+      #   uses: mymindstorm/setup-emsdk@v14
+      #   with:
+      #     version: latest
+
+      - name: Build RGFW
+        run: |
+          c3c build deps-wayland --trust=full
+          c3c build deps-x11 --trust=full
+          # c3c build deps-web --trust=full
+
+      - name: Build Linux Targets
+        run: |
+          c3c build asteroids_linux_wayland
+          c3c build asteroids_linux_x11
+
+      - name: Cache MSVC SDK
+        id: cache-msvc
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/c3/msvc_sdk
+          key: ${{ runner.os }}-msvc-sdk
+
+      - name: Build Windows Target
+        run: |
+          if [ ! -d "$HOME/.cache/c3/msvc_sdk" ]; then
+            c3c fetch-sdk windows --accept-license
+          else
+            echo "Using cached MSVC SDK."
+          fi
+          c3c build deps-windows --trust=full
+          c3c build asteroids_windows
+
+      - name: Build Web Target
+        run: |
+          # c3c build asteroids_web --trust=full
+          echo "Using pre-built web assets from 'web' folder"
+
+      - name: Package Release
+        run: |
+          mkdir -p release/asteroids_linux_wayland release/asteroids_linux_x11 release/asteroids_windows release/asteroids_web
+          
+          # Linux
+          cp build/asteroids_linux_wayland release/asteroids_linux_wayland/
+          cp build/asteroids_linux_x11 release/asteroids_linux_x11/
+          
+          # Windows
+          cp build/asteroids_windows.exe release/asteroids_windows/
+          
+          # Web
+          #cp build/asteroids.html build/asteroids.js build/asteroids.wasm release/asteroids_web/
+          #cp build/asteroids.html release/asteroids_web/index.html
+
+          # Web (Use pre-built files from web/ folder)
+          cp web/asteroids.html web/asteroids.js web/asteroids.wasm web/index.html release/asteroids_web/
+          
+          # Zip them up
+          cd release
+          zip -r ../asteroids_linux_wayland.zip asteroids_linux_wayland
+          zip -r ../asteroids_linux_x11.zip asteroids_linux_x11
+          zip -r ../asteroids_windows.zip asteroids_windows
+          zip -r ../asteroids_web.zip asteroids_web
+          cd ..
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: asteroids-builds
+          path: |
+            *.zip
+
+      - name: Setup Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # path: release/asteroids_web/
+          path: web/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            asteroids_linux_wayland.zip
+            asteroids_linux_x11.zip
+            asteroids_windows.zip
+            asteroids_web.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-pages:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

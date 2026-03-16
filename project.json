@@ -1,0 +1,70 @@
+{
+	"langrev": "1",
+	"warnings": [ "no-unused" ],
+	"dependency-search-paths": [],
+	"dependencies": [],
+	"authors": [ "Manuel Linares <mbarriolinares@gmail.com>" ],
+	"version": "0.1.0",
+	"sources": [ "src/**", "lib/rgfw.c3" ],
+	"c-include-dirs": [ "deps/miniaudio" ],
+	"test-sources": [ "test/**" ],
+	"build-dir": "build",
+	"output": "build",
+	"script-dir": ".",
+	"targets": {
+		"asteroids_linux_wayland": {
+			"type": "executable",
+			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
+			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW_wayland.a",
+				"m", "dl", "rt", "pthread", "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon" ]
+		},
+		"asteroids_linux_x11": {
+			"type": "executable",
+			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
+			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW_x11.a",
+				"X11", "Xrandr", "m", "dl", "rt", "pthread" ]
+		},
+		"deps-wayland": {
+			"type": "prepare",
+			"exec": [ "scripts/build_rgfw_linux_wayland.sh" ]
+		},
+		"deps-x11": {
+			"type": "prepare",
+			"exec": [ "scripts/build_rgfw_linux_x11.sh" ]
+		},
+		"deps-windows": {
+			"type": "prepare",
+			"exec": [
+				"mkdir -p deps/miniaudio_windows_amd64/lib",
+				"clang -O3 -target x86_64-pc-windows-gnu -mno-stack-arg-probe -D__USE_MINGW_ANSI_STDIO=0 -c deps/miniaudio/miniaudio_impl.c -o deps/miniaudio_windows_amd64/lib/miniaudio.obj -Ideps/miniaudio"
+			]
+		},
+		"asteroids_windows": {
+			"type": "executable",
+			"target": "windows-x64",
+			"link-args": [ "deps/RGFW_windows_amd64/lib/RGFW.lib", "deps/miniaudio_windows_amd64/lib/miniaudio.obj" ],
+			"linked-libraries": [ "gdi32", "shell32", "user32", "winmm" ]
+		},
+		"web_objs": {
+			"type": "object-files",
+			"target": "wasm32",
+			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
+			"cc": "emcc"
+		},
+		"asteroids_web": {
+			"type": "prepare",
+			"exec": [ "scripts/build_web.sh" ]
+		},
+		"deps-web": {
+			"type": "prepare",
+			"exec": [ "scripts/build_rgfw_wasm.sh" ]
+		},
+		"list_objs": {
+			"type": "object-files",
+			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ]
+		}
+	},
+	"cpu": "generic",
+	"opt": "O3",
+	"debug-info": "none"
+}
