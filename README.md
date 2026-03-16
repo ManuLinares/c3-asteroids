@@ -6,7 +6,7 @@ You can play it in the browser: https://manulinares.github.io/c3-asteroids/
 
 ## Demo
 
-[![Asteroids gameplay](https://img.youtube.com/vi/hHuq6c-NRUs/hqdefault.jpg)](https://www.youtube.com/watch?v=hHuq6c-NRUs)
+[![Asteroids gameplay](https://img.youtube.com/vi/hHuq6c-NRUs/maxresdefault.jpg)](https://www.youtube.com/watch?v=hHuq6c-NRUs)
 
 ## Dependencies
 
