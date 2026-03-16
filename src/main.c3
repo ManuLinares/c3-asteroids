@@ -10,8 +10,7 @@ import std::hash::wyhash2;
 import std::time;
 import std::time::clock;
 import std::thread;
-import libc;
-
+import std::os;
 
 typedef Color = char[<4>];
 
@@ -27,6 +26,19 @@ const float[<3>][4] SHIP_VERTS = {
 	{0.6f,  0.0f, -0.6f},
 	{0.0f,  0.0f, -0.2f}
 };
+
+const float[<3>][6] SAUCER_VERTS = {
+	{-1.0f, 0.0f,  0.0f},
+	{ 1.0f, 0.0f,  0.0f},
+	{-0.5f, 0.0f, -0.5f},
+	{ 0.5f, 0.0f, -0.5f},
+	{-0.5f, 0.0f,  0.5f},
+	{ 0.5f, 0.0f,  0.5f}
+};
+
+const int[2][] SHIP_LINES     = { {0,1}, {0,2}, {1,3}, {2,3}, {1,2} };
+const int[2][] SAUCER_LINES   = { {0,1}, {2,3}, {4,5}, {0,2}, {1,3}, {0,4}, {1,5} };
+const int[2][] ASTEROID_LINES = { {0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,6}, {6,7}, {7,0} };
 
 bitstruct Input : char {
 	bool forward : 0;
@@ -89,10 +101,28 @@ struct Saucer {
 	bool active;
 }
 
+const float WORLD_PLAY_SIZE = 24.0f; // Safe area where player normally stays
+const float WORLD_WRAP_MARGIN = 12.0f; // How far beyond world an object goes before wrapping
+const float WORLD_SIZE = WORLD_PLAY_SIZE + WORLD_WRAP_MARGIN;
+
+const float SHIP_THRUST_ACC  = 0.006f;
+const float SHIP_ROT_SPEED   = 0.06f;
+const float SHIP_CAM_EASE    = 0.05f;
+const float SHIP_BASE_SCALE  = 45.0f;
+const int   SHIP_LIVES_START = 3;
+const float SHIP_BULLET_SPEED = 0.3f;
+const float SHIP_BULLET_SPEED_CHEAT = 1.2f;
+
+const int   SCORE_EXTRA_LIFE = 10000;
+const int   SCORE_ASTEROID_L = 20;
+const int   SCORE_ASTEROID_M = 50;
+const int   SCORE_ASTEROID_S = 100;
+const int   SCORE_SAUCER_B   = 200;
+const int   SCORE_SAUCER_S   = 1000;
+
 const usz MAX_PARTICLES = 512;
-const usz MAX_BULLETS   = 32;
+const usz MAX_BULLETS   = 128;
 const usz MAX_ASTEROIDS = 128;
-const float WORLD_SIZE  = 20.0f;
 
 struct Game {
 	float[<3>] ship_pos;
@@ -125,6 +155,8 @@ struct Game {
 	bool game_over;
 	bool cheat_mode;
 	bool paused;
+	bool is_started;
+	bool is_focused;
 	Saucer saucer;
 
 	Particle[MAX_PARTICLES] particles;
@@ -140,9 +172,9 @@ struct Game {
 fn void Game.init(&self, bool full_reset) {
 	if (full_reset) {
 		self.score = 0;
-		self.lives = 3;
+		self.lives = SHIP_LIVES_START;
 		self.wave = 0;
-		self.next_extra_life_score = 10000;
+		self.next_extra_life_score = SCORE_EXTRA_LIFE;
 		self.game_over = false;
 		self.paused = false;
 		self.frame = 0;
@@ -161,10 +193,10 @@ fn void Game.init(&self, bool full_reset) {
 	self.ship_rot   = quaternion::IDENTITY;
 	self.cam_pos    = self.ship_pos;
 
-	self.thrust_acc = 0.006f;
-	self.rot_speed  = 0.06f;
-	self.cam_ease   = 0.05f;
-	self.scale      = 45.0f;
+	self.thrust_acc = SHIP_THRUST_ACC;
+	self.rot_speed  = SHIP_ROT_SPEED;
+	self.cam_ease   = SHIP_CAM_EASE;
+	self.scale      = SHIP_BASE_SCALE;
 	self.shoot_cooldown = 0;
 	self.is_dead    = false;
 	self.death_timer = 0.0f;
@@ -175,10 +207,12 @@ fn void Game.init(&self, bool full_reset) {
 	self.reschedule_saucer();
 	self.saucer.active = false;
 	self.cheat_mode = false;
-
-	foreach (&p : self.particles) p.life = 0.0f;
-	foreach (&b : self.bullets)   b.life = 0.0f;
-	foreach (&d : self.ship_pieces) d.active = false;
+	self.is_focused = true;
+	$if env::WASM:
+		self.is_started = false;
+	$else
+		self.is_started = true;
+	$endif
 }
 
 fn void Game.load_best_score(&self) {
@@ -189,10 +223,10 @@ fn void Game.load_best_score(&self) {
 		if (try f = io::file::open("score.txt", "r")) {
 			defer (void)f.close();
 			char[32] buf;
-			usz len = f.read(buf[..])!!;
-			if (len > 0) {
-				buf[len] = 0;
-				self.best_score = (int)libc::atoi(&buf);
+			if (usz len = f.read(buf[..])!!) {
+				if (try score = String.to_int((String)buf[:len])) {
+					self.best_score = score;
+				}
 			}
 		}
 	$endif
@@ -200,15 +234,11 @@ fn void Game.load_best_score(&self) {
 
 fn void Game.save_best_score(&self) {
 	$if (env::WASM):
-		char[64] script;
-		io::bprintf(script[..], "save_score(%d)\0", self.best_score);
-		emscripten_run_script(&script);
+		emscripten_run_script(string::tformat("save_score(%d)\0", self.best_score));
 	$else
-		if (try f = io::file::open("score.txt", "w")) {
+		if (try f = file::open("score.txt", "w")) {
 			defer (void)f.close();
-			char[32] buf;
-			usz len = (usz)libc::sprintf(&buf, "%d", self.best_score);
-			(void)f.write(buf[:len]);
+			(void)f.write(string::tformat("%d", self.best_score));
 		}
 	$endif
 }
@@ -264,10 +294,10 @@ fn void Game.trigger_saucer_death(&self, bool award_points) {
 	if (!self.saucer.active) return;
 
 	if (award_points) {
-		self.score += (self.saucer.type == SaucerType.SMALL) ? 1000 : 200;
+		self.score += (self.saucer.type == SaucerType.SMALL) ? SCORE_SAUCER_S : SCORE_SAUCER_B;
 		if (self.score >= self.next_extra_life_score) {
 			self.lives++;
-			self.next_extra_life_score += 10000;
+			self.next_extra_life_score += SCORE_EXTRA_LIFE;
 		}
 	}
 
@@ -296,11 +326,11 @@ fn void Game.destroy_asteroid(&self, Asteroid* a, float[<3>] impact_vel, bool aw
 
 	if (award_points) {
 		if (a.size == AsteroidSize.LARGE) {
-			self.score += 20;
+			self.score += SCORE_ASTEROID_L;
 		} else if (a.size == AsteroidSize.MEDIUM) {
-			self.score += 50;
+			self.score += SCORE_ASTEROID_M;
 		} else {
-			self.score += 100;
+			self.score += SCORE_ASTEROID_S;
 		}
 
 		if (self.score >= self.next_extra_life_score) {
@@ -346,8 +376,8 @@ fn void Game.destroy_asteroid(&self, Asteroid* a, float[<3>] impact_vel, bool aw
 fn void Game.spawn_wave(&self) {
 	self.wave_notif_timer = 2.0f;
 	ulong seed = (ulong)get_time_ns() ^ (ulong)self.frame;
-	int count = 2 + self.wave * 2;
-	if (count > 11) count = 11;
+	int count = 6 + self.wave * 2;
+	if (count > 25) count = 25;
 
 	for (usz i = 0; i < (usz)count; i++) {
 		Asteroid* a = &self.asteroids[i];
@@ -355,9 +385,12 @@ fn void Game.spawn_wave(&self) {
 
 		float angle = (float)(h % 360u) * 3.14159f / 180.0f;
 		float dist = 6.0f + (float)((h >> 8) % 100u) * 0.1f;
-		float[<3>] pos = {math::cos(angle) * dist, 0, math::sin(angle) * dist};
-		float[<3>] vel = {((float)((h >> 16) & 0xFFu) / 255.0f - 0.5f) * (0.03f + (float)self.wave * 0.005f), 0,
-						 ((float)((h >> 24) & 0xFFu) / 255.0f - 0.5f) * (0.03f + (float)self.wave * 0.005f)};
+		float[<3>] pos = {};
+		pos.xz = (float[<2>]){math::cos(angle), math::sin(angle)} * dist;
+
+		float[<3>] vel = {};
+		float[<2>] rand_vec = {(float)((h >> 16) & 0xFFu), (float)((h >> 24) & 0xFFu)};
+		vel.xz = (rand_vec / 255.0f - 0.5f) * (0.03f + (float)self.wave * 0.005f);
 
 		a.spawn(pos, vel, AsteroidSize.LARGE, (uint)h);
 	}
@@ -377,7 +410,8 @@ fn void Asteroid.spawn(&self, float[<3>] pos, float[<3>] vel, AsteroidSize size,
 		float va = (float)j * 3.14159f * 2.0f / 8.0f;
 		ulong vh = wyhash2::hash(((char*)&j)[:int.sizeof], (ulong)seed);
 		float vr = self.radius * (0.7f + (float)(vh % 30u) * 0.02f);
-		self.verts[j] = {math::cos(va) * vr, 0, math::sin(va) * vr};
+		self.verts[j] = {};
+		self.verts[j].xz = (float[<2>]){math::cos(va), math::sin(va)} * vr;
 	}
 }
 
@@ -430,19 +464,26 @@ fn bool draw_line(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color col
 fn void draw_star(Color* buf, usz[<2>] size, int[<2>] pos, int arm, Color color, bool check_collision) {
 	draw_pixel(buf, size, pos, color, check_collision);
 	for (int i = -arm; i <= arm; i++) {
-		draw_pixel(buf, size, pos + (int[<2>]){i, 0}, color, check_collision);
-		draw_pixel(buf, size, pos + (int[<2>]){0, i}, color, check_collision);
+		draw_pixel(buf, size, pos + {i, 0}, color, check_collision);
+		draw_pixel(buf, size, pos + {0, i}, color, check_collision);
 	}
 }
 
-fn float toroidal_offset(float val) {
-	float w = WORLD_SIZE * 2.0f;
-	return val - math::round(val / w) * w;
+fn bool draw_lines(Color* buf, usz[<2>] size, int[<2>][] pts, int[2][] indices, Color c, bool collision) {
+	bool hit = false;
+	foreach (idx : indices) {
+		if (draw_line(buf, size, pts[idx[0]], pts[idx[1]], c, collision)) hit = true;
+	}
+	return hit;
+}
+
+fn float[<2>] toroidal_offset(float[<2>] val) {
+	const float W = WORLD_SIZE * 2.0f;
+	return val - math::round(val / W) * W;
 }
 
 fn float[<2>] get_relative_pos(float[<2>] pos, float[<3>] cam) {
-	float[<2>] rel = pos - cam.xz;
-	return {toroidal_offset(rel.x), toroidal_offset(rel.y)};
+	return toroidal_offset(pos - cam.xz);
 }
 
 fn int[<2>] to_screen(float[<2>] rel, float scale, usz[<2>] size) {
@@ -490,12 +531,15 @@ const FontLine[] F_P = { {0,4,0,0}, {0,0,2,0}, {2,0,2,2}, {2,2,0,2} };
 const FontLine[] F_U = { {0,0,0,4}, {0,4,2,4}, {2,4,2,0} };
 const FontLine[] F_D = { {0,0,0,4}, {0,0,1.5,0}, {1.5,0,2,0.5}, {2,0.5,2,3.5}, {2,3.5,1.5,4}, {1.5,4,0,4} };
 const FontLine[] F_N = { {0,4,0,0}, {0,0,2,4}, {2,4,2,0} };
+const FontLine[] F_F = { {0,0,0,4}, {0,0,2,0}, {0,2,1.5,2} };
+const FontLine[] F_K = { {0,0,0,4}, {2,0,0,2}, {0,2,2,4} };
 const FontLine[] F_SPACE = { };
 
-const FontLine[][30] FONT_DATA = {
+const FontLine[][32] FONT_DATA = {
 	F_0, F_1, F_2, F_3, F_4, F_5, F_6, F_7, F_8, F_9,
 	F_G, F_A, F_M, F_E, F_O, F_V, F_R, F_W, F_S, F_C,
-	F_H, F_L, F_I, F_B, F_T, F_P, F_U, F_D, F_N, F_SPACE
+	F_H, F_L, F_I, F_B, F_T, F_P, F_U, F_D, F_N, F_F,
+	F_K, F_SPACE
 };
 
 fn void draw_text(Color* buf, usz[<2>] size, int[<2>] pos, int text_size, char* str, Color c) {
@@ -523,6 +567,8 @@ fn void draw_text(Color* buf, usz[<2>] size, int[<2>] pos, int text_size, char* 
 			case 'U': idx = 26;
 			case 'D': idx = 27;
 			case 'N': idx = 28;
+			case 'F': idx = 29;
+			case 'K': idx = 30;
 			default: break;
 		}
 
@@ -539,16 +585,21 @@ fn void draw_text(Color* buf, usz[<2>] size, int[<2>] pos, int text_size, char* 
 }
 
 fn void wrap(float[<3>]* pos) {
-	if (pos.x >  WORLD_SIZE) pos.x -= WORLD_SIZE * 2;
-	if (pos.x < -WORLD_SIZE) pos.x += WORLD_SIZE * 2;
-	if (pos.z >  WORLD_SIZE) pos.z -= WORLD_SIZE * 2;
-	if (pos.z < -WORLD_SIZE) pos.z += WORLD_SIZE * 2;
+	const float W = WORLD_SIZE * 2.0f;
+	pos.xz -= math::round(pos.xz / W) * W;
 }
 
 fn void update(Game* g) {
-	if (g.paused) return;
+	bool should_update;
+	$if env::WASM:
+		should_update = !g.paused && g.is_started && g.is_focused;
+	$else
+		should_update = !g.paused && g.is_started;
+	$endif
+
+	if (!should_update) return;
 	g.frame++;
-	float[<3>] ship_fwd = g.ship_rot * (float[<3>]){0, 0, 1};
+	float[<3>] ship_fwd = g.ship_rot * {0, 0, 1};
 
 	static bool cheat_last = false;
 	if (g.input.cheat && !cheat_last) {
@@ -557,16 +608,16 @@ fn void update(Game* g) {
 	cheat_last = g.input.cheat;
 
 	if (g.shoot_cooldown > 0) g.shoot_cooldown--;
-	if (g.input.shoot && g.shoot_cooldown == 0) {
+	if (!g.is_dead && !g.game_over && !g.is_won && g.input.shoot && g.shoot_cooldown == 0) {
 		foreach (&b : g.bullets) {
 			if (b.life <= 0) {
 				b.pos  = g.ship_pos + ship_fwd * 0.6f;
 				if (g.cheat_mode) {
-					b.vel  = ship_fwd * 0.8f;
+					b.vel  = ship_fwd * SHIP_BULLET_SPEED_CHEAT;
 					b.life = 180;
-					g.shoot_cooldown = 4;
+					g.shoot_cooldown = 3;
 				} else {
-					b.vel  = ship_fwd * 0.3f;
+					b.vel  = ship_fwd * SHIP_BULLET_SPEED;
 					b.life = 60;
 					g.shoot_cooldown = 15;
 				}
@@ -577,19 +628,21 @@ fn void update(Game* g) {
 		}
 	}
 
-	audio::audio_set_thrust(g.input.forward);
-	if (g.input.forward) {
-		g.ship_vel += ship_fwd * g.thrust_acc;
+	bool thrusting = !g.is_dead && !g.game_over && !g.is_won && g.input.forward;
+	audio::audio_set_thrust(thrusting);
+	float speed_mult = g.cheat_mode ? 4.0f : 1.0f;
 
-		float[<3>] back_pos = g.ship_pos + (g.ship_rot * (float[<3>]){0, 0, -0.6f});
+	if (thrusting) {
+		g.ship_vel += ship_fwd * (g.thrust_acc * speed_mult);
+
+		float[<3>] back_pos = g.ship_pos + (g.ship_rot * {0, 0, -0.6f});
 		for (int i = 0; i < 2; i++) {
 			foreach (&p : g.particles) {
 				if (p.life <= 0.0f) {
 					p.pos = back_pos;
 					ulong rf = wyhash2::hash(((char*)&g.frame)[:uint.sizeof], (ulong)i);
-					float vx = ((float)(rf & 0xFFu) / 255.0f - 0.5f) * 0.05f;
-					float vz = ((float)((rf >> 8) & 0xFFu) / 255.0f - 0.5f) * 0.05f;
-					p.vel = (ship_fwd * -0.1f) + (float[<3>]){vx, 0, vz};
+					float[<2>] rand_vec = {(float)(rf & 0xFFu), (float)((rf >> 8) & 0xFFu)};
+					p.vel.xz = (ship_fwd.xz * -0.1f) + (rand_vec / 255.0f - 0.5f) * 0.05f;
 					p.life = 0.5f + ((float)((rf >> 16) & 0xFFu) / 255.0f) * 0.5f;
 					break;
 				}
@@ -602,8 +655,10 @@ fn void update(Game* g) {
 
 	g.ship_pos += g.ship_vel;
 
-	if (g.input.left)    g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0},  g.rot_speed);
-	if (g.input.right)   g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0}, -g.rot_speed);
+	if (!g.is_dead && !g.game_over && !g.is_won) {
+		if (g.input.left)    g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0},  g.rot_speed);
+		if (g.input.right)   g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0}, -g.rot_speed);
+	}
 
 	static bool hyperspace_last = false;
 	if (g.input.hyperspace && !hyperspace_last && !g.is_dead && !g.is_won) {
@@ -680,8 +735,8 @@ fn void update(Game* g) {
 						target_dir = (g.ship_pos - g.saucer.pos).normalize();
 						float inaccuracy = math::max(0.0f, 0.4f - (float)g.score / 100000.0f);
 						ulong rh = wyhash2::hash(((char*)&g.frame)[:uint.sizeof]);
-						target_dir.x += ((float)(rh & 0xFFu) / 255.0f - 0.5f) * inaccuracy;
-						target_dir.z += ((float)((rh >> 8) & 0xFFu) / 255.0f - 0.5f) * inaccuracy;
+						float[<2>] rand_off = {(float)(rh & 0xFFu), (float)((rh >> 8) & 0xFFu)};
+						target_dir.xz += (rand_off / 255.0f - 0.5f) * inaccuracy;
 						target_dir = target_dir.normalize();
 					} else {
 						ulong rh = wyhash2::hash(((char*)&g.frame)[:uint.sizeof]);
@@ -755,17 +810,19 @@ fn void update(Game* g) {
 	if (g.is_won) {
 		g.win_timer += 0.016f;
 
-		// Victory fireworks
-		if (g.win_timer < 1.0f && g.frame % 10 == 0) {
-			float[<3>] firework_pos = g.ship_pos + (float[<3>]){(float)(g.frame % 7u) - 3.5f, 0, (float)((g.frame / 7u) % 7u) - 3.5f};
-			for (int i = 0; i < 20; i++) {
+		// Victory fireworks: trigger periodically for the first 3 seconds
+		if (g.win_timer < 3.0f && g.frame % 12 == 0) {
+			ulong h_pos = wyhash2::hash(((char*)&g.frame)[:uint.sizeof]);
+			float[<3>] firework_pos = g.ship_pos;
+			firework_pos.xz += (float[<2>]){(float)(h_pos & 0xFFu) / 25.5f - 5.0f, (float)((h_pos >> 8) & 0xFFu) / 25.5f - 5.0f};
+
+			for (int i = 0; i < 30; i++) {
 				foreach (&p : g.particles) {
 					if (p.life <= 0.0f) {
 						p.pos = firework_pos;
 						ulong h = wyhash2::hash(((char*)&i)[:int.sizeof], (ulong)g.frame);
-						p.vel = {((float)(h & 0xFFu) / 128.0f - 1.0f) * 0.2f, 0,
-								 ((float)((h >> 8) & 0xFFu) / 128.0f - 1.0f) * 0.2f};
-						p.life = 1.0f;
+						p.vel.xz = (float[<2>]){(float)(h & 0xFFu) / 128.0f - 1.0f, (float)((h >> 8) & 0xFFu) / 128.0f - 1.0f} * 0.35f;
+						p.life = 0.8f + (float)(h % 50u) * 0.01f;
 						break;
 					}
 				}
@@ -804,10 +861,7 @@ fn void update(Game* g) {
 		}
 	}
 
-	float dx = toroidal_offset(g.ship_pos.x - g.cam_pos.x);
-	float dz = toroidal_offset(g.ship_pos.z - g.cam_pos.z);
-	g.cam_pos.x += dx * g.cam_ease;
-	g.cam_pos.z += dz * g.cam_ease;
+	g.cam_pos.xz += toroidal_offset(g.ship_pos.xz - g.cam_pos.xz) * g.cam_ease;
 	wrap(&g.cam_pos);
 
 	float speed_mag = g.ship_vel.length();
@@ -836,18 +890,21 @@ fn void update(Game* g) {
 }
 
 fn void draw_grid(Game* g, Color* buf, usz[<2>] size) {
-	float spacing = 3.0f;
-	int cell_x = (int)(g.cam_pos.x / spacing);
-	int cell_z = (int)(g.cam_pos.z / spacing);
+	const float SPACING = 4.0f;
+	const int GRID_DIM = (int)$$ceil((WORLD_SIZE * 2.0f) / SPACING);
 
-	for (int gx = cell_x - 8; gx <= cell_x + 8; gx++) {
-		for (int gz = cell_z - 8; gz <= cell_z + 8; gz++) {
-			int[2] key = {gx, gz};
+	int cell_x = (int)math::floor(g.cam_pos.x / SPACING);
+	int cell_z = (int)math::floor(g.cam_pos.z / SPACING);
+
+	for (int gx = cell_x - 18; gx <= cell_x + 18; gx++) {
+		for (int gz = cell_z - 18; gz <= cell_z + 18; gz++) {
+			int[2] key = { (gx % GRID_DIM + GRID_DIM) % GRID_DIM, 
+			               (gz % GRID_DIM + GRID_DIM) % GRID_DIM };
 			ulong hv = wyhash2::hash(((char*)&key)[:int[2].sizeof]);
 
-			float ox = ((float)(hv & 0xFFu) / 255.0f - 0.5f) * spacing * 1.7f;
-			float oz = ((float)((hv >> 8) & 0xFFu) / 255.0f - 0.5f) * spacing * 1.7f;
-			float[<2>] w_pos = { (float)gx * spacing + ox, (float)gz * spacing + oz };
+			float ox = ((float)(hv & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
+			float oz = ((float)((hv >> 8) & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
+			float[<2>] w_pos = { (float)gx * SPACING + ox, (float)gz * SPACING + oz };
 
 			int arm = 2 + (int)((hv >> 16) % 3u);
 
@@ -865,28 +922,25 @@ fn void draw_ship(Game* g, Color* buf, usz[<2>] size) {
 		foreach (&d : g.ship_pieces) {
 			if (!d.active) continue;
 			int[<2>] s1 = project(d.p1.xz, g.cam_pos, g.scale, size);
-			int[<2>] s2 = project(d.p2.xz, g.cam_pos, g.scale, size);
+			float[<2>] diff = (d.p2 - d.p1).xz;
+			int[<2>] s2 = s1 + (int[<2>])(diff * g.scale);
 			draw_line(buf, size, s1, s2, GREEN, false);
 		}
 		return;
 	}
 
+	int[<2>] s_center = project(g.ship_pos.xz, g.cam_pos, g.scale, size);
 	float[<3>][4] world_v;
 	int[<2>][4] s;
-
 	foreach (i, v : SHIP_VERTS) {
-		world_v[i] = (g.ship_rot * v) + g.ship_pos;
-		s[i] = project(world_v[i].xz, g.cam_pos, g.scale, size);
+		float[<3>] lv = g.ship_rot * v;
+		world_v[i] = lv + g.ship_pos;
+		s[i] = s_center + (int[<2>])(lv.xz * g.scale);
 	}
 
-	bool hit = false;
-	if (draw_line(buf, size, s[0], s[1], GREEN, true)) hit = true;
-	if (draw_line(buf, size, s[0], s[2], GREEN, true)) hit = true;
-	if (draw_line(buf, size, s[1], s[3], GREEN, true)) hit = true;
-	if (draw_line(buf, size, s[2], s[3], GREEN, true)) hit = true;
-	if (draw_line(buf, size, s[1], s[2], GREEN, true)) hit = true;
-
-	if (hit) g.trigger_death(world_v);
+	if (draw_lines(buf, size, s[..], SHIP_LINES, GREEN, true)) {
+		g.trigger_death(world_v);
+	}
 }
 
 fn void draw_particles(Game* g, Color* buf, usz[<2>] size) {
@@ -917,7 +971,8 @@ fn void draw_bullets(Game* g, Color* buf, usz[<2>] size) {
 	foreach (&b : g.bullets) {
 		if (b.life <= 0) continue;
 		int[<2>] s1 = project(b.pos.xz, g.cam_pos, g.scale, size);
-		int[<2>] s2 = project((b.pos - b.vel * 1.25f).xz, g.cam_pos, g.scale, size);
+		float[<2>] vel_off = b.vel.xz * 1.25f;
+		int[<2>] s2 = s1 - (int[<2>])(vel_off * g.scale);
 		Color c = b.from_ship ? WHITE : ENEMY_COLOR;
 
 		draw_line(buf, size, s1, s2, c, false);
@@ -929,48 +984,37 @@ fn void draw_asteroids(Game* g, Color* buf, usz[<2>] size) {
 	foreach (&a : g.asteroids) {
 		if (!a.active) continue;
 
+		int[<2>] s_center = project(a.pos.xz, g.cam_pos, g.scale, size);
 		int[<2>][8] s;
 		Quaternionf rotation = quaternion::from_axis_angle({0, 1, 0}, a.rot);
 
 		for (int i = 0; i < 8; i++) {
-			s[i] = project((a.pos + (rotation * a.verts[i])).xz, g.cam_pos, g.scale, size);
+			float[<3>] local_v = rotation * a.verts[i];
+			s[i] = s_center + (int[<2>])(local_v.xz * g.scale);
 		}
 
-		for (int i = 0; i < 8; i++) {
-			draw_line(buf, size, s[i], s[(i + 1) % 8], ASTEROID_COLOR, false);
-		}
+		draw_lines(buf, size, s[..], ASTEROID_LINES, ASTEROID_COLOR, false);
 	}
 }
 
 fn void draw_saucer(Game* g, Color* buf, usz[<2>] size) {
 	if (!g.saucer.active) return;
-	float rad = g.saucer.type == SaucerType.SMALL ? 0.3f : 0.6f;
+	int[<2>] s_center = project(g.saucer.pos.xz, g.cam_pos, g.scale, size);
+	float rad = g.saucer.type == SaucerType.SMALL ? 0.35f : 1.2f;
 
-	int[<2>] p1 = project(g.saucer.pos.xz + (float[<2>]){-rad, 0}, g.cam_pos, g.scale, size);
-	int[<2>] p2 = project(g.saucer.pos.xz + (float[<2>]){rad, 0}, g.cam_pos, g.scale, size);
-	int[<2>] p3 = project(g.saucer.pos.xz + (float[<2>]){-rad*0.5f, -rad*0.5f}, g.cam_pos, g.scale, size);
-	int[<2>] p4 = project(g.saucer.pos.xz + (float[<2>]){rad*0.5f, -rad*0.5f}, g.cam_pos, g.scale, size);
-	int[<2>] p5 = project(g.saucer.pos.xz + (float[<2>]){-rad*0.5f, rad*0.5f}, g.cam_pos, g.scale, size);
-	int[<2>] p6 = project(g.saucer.pos.xz + (float[<2>]){rad*0.5f, rad*0.5f}, g.cam_pos, g.scale, size);
+	int[<2>][6] s;
+	foreach (i, v : SAUCER_VERTS) {
+		s[i] = s_center + (int[<2>])(v.xz * (rad * g.scale));
+	}
 
-	draw_line(buf, size, p1, p2, ENEMY_COLOR, false);
-	draw_line(buf, size, p3, p4, ENEMY_COLOR, false);
-	draw_line(buf, size, p5, p6, ENEMY_COLOR, false);
-	draw_line(buf, size, p1, p3, ENEMY_COLOR, false);
-	draw_line(buf, size, p2, p4, ENEMY_COLOR, false);
-	draw_line(buf, size, p1, p5, ENEMY_COLOR, false);
-	draw_line(buf, size, p2, p6, ENEMY_COLOR, false);
+	draw_lines(buf, size, s[..], SAUCER_LINES, ENEMY_COLOR, false);
 }
 
 fn void draw_hud(Game* g, Color* buf, usz[<2>] size) {
 	draw_text(buf, size, {50, 20}, 4, "SCORE", WHITE);
-	char[32] score_str;
-	io::bprintf(score_str[..], "%d", g.score);
-	draw_text(buf, size, {50, 50}, 8, (char*)&score_str, WHITE);
+	draw_text(buf, size, {50, 50}, 8, string::tformat("%d", g.score), WHITE);
 	draw_text(buf, size, {(int)size.x/2 - 50, 25}, 3, "BEST", WHITE);
-	char[32] best_str;
-	io::bprintf(best_str[..], "%d", g.best_score);
-	draw_text(buf, size, {(int)size.x/2 - 50, 50}, 5, (char*)&best_str, WHITE);
+	draw_text(buf, size, {(int)size.x/2 - 50, 50}, 5, string::tformat("%d", g.best_score), WHITE);
 
 	for (int i = 0; i < g.lives; i++) {
 		int lx = 50 + i * 30;
@@ -987,13 +1031,9 @@ fn void draw_hud(Game* g, Color* buf, usz[<2>] size) {
 	}
 
 	if (g.wave_notif_timer > 0.0f) {
-		char[32] wave_str;
-		io::bprintf(wave_str[..], "WAVE %d", g.wave);
-		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, (char*)&wave_str, WHITE);
+		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::tformat("WAVE %d", g.wave), WHITE);
 	} else if (g.is_won && g.win_timer > 1.0f) {
-		char[32] wave_str;
-		io::bprintf(wave_str[..], "WAVE %d", g.wave + 1);
-		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, (char*)&wave_str, WHITE);
+		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::tformat("WAVE %d", g.wave + 1), WHITE);
 	}
 
 	if (g.cheat_mode) {
@@ -1026,11 +1066,22 @@ fn long get_time_ns() {
 
 fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, usz[<2>] size, rgfw::Window* win, rgfw::Surface* surface) {
 	const double DT = 1.0 / 60.0;
-	*accumulator += dt;
 
-	while (*accumulator >= DT) {
-		update(self);
-		*accumulator -= DT;
+	bool should_run;
+	$if env::WASM:
+		should_run = self.is_started && self.is_focused;
+	$else
+		should_run = self.is_started;
+	$endif
+
+	if (should_run) {
+		*accumulator += dt;
+		while (*accumulator >= DT) {
+			update(self);
+			*accumulator -= DT;
+		}
+	} else {
+		*accumulator = 0.0;
 	}
 
 	if (self.score > self.best_score) {
@@ -1040,7 +1091,7 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, usz
 		$endif
 	}
 
-	mem::set(buffer, 0, size.x * size.y * Color.sizeof);
+	buffer[:size.x * size.y] = BLACK;
 
 	draw_grid(self, buffer, size);
 	draw_particles(self, buffer, size);
@@ -1050,7 +1101,14 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, usz
 	draw_ship(self, buffer, size);
 	draw_hud(self, buffer, size);
 
-	// Game Over screen tint
+	$if env::WASM:
+		if (!self.is_started) {
+			draw_text(buffer, size, {(int)size.x/2 - 150, (int)size.y/2}, 10, "CLICK TO START", WHITE);
+		} else if (!self.is_focused) {
+			draw_text(buffer, size, {(int)size.x/2 - 150, (int)size.y/2}, 10, "CLICK TO FOCUS", WHITE);
+		}
+	$endif
+
 	if (self.is_dead || self.game_over) {
 		float tint = self.game_over ? 1.0f : self.death_timer;
 		if (tint > 1.0f) tint = 1.0f;
@@ -1062,7 +1120,6 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, usz
 		}
 	}
 
-	// Win screen wash
 	if (self.is_won) {
 		float val_f = 0.0f;
 		if (self.win_timer < 1.0f) {
@@ -1105,7 +1162,14 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 	while (rgfw::window_check_event(ctx.win, &ctx.event)) {
 		switch (ctx.event.type) {
 			case rgfw::EventType.QUIT: return;
+			case rgfw::EventType.FOCUS_IN: ctx.g.is_focused = true;
+			case rgfw::EventType.FOCUS_OUT: ctx.g.is_focused = false;
+			case rgfw::EventType.MOUSE_BUTTON_PRESSED:
+				if (!ctx.g.is_started) ctx.g.is_started = true;
+				ctx.g.is_focused = true;
 			case rgfw::EventType.KEY_PRESSED:
+				if (!ctx.g.is_started) ctx.g.is_started = true;
+				ctx.g.is_focused = true;
 				if (ctx.event.key.value == rgfw::Key.P) ctx.g.paused = !ctx.g.paused;
 				apply_key(&ctx.g.input, ctx.event.key.value, true);
 			case rgfw::EventType.KEY_RELEASED:
@@ -1121,6 +1185,10 @@ alias EmMainLoopFunc = fn void(void*) @callconv("cdecl");
 extern fn void emscripten_set_main_loop_arg(EmMainLoopFunc func, void* arg, int fps, int simulate_infinite_loop) @callconv("cdecl");
 extern fn void emscripten_run_script(char* s) @callconv("cdecl");
 extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
+
+fn void wasm_start_game() @export("wasm_start_game") {
+	web_ctx.g.is_started = true;
+}
 
 //extern fn void trap() @extern("abort") @callconv("cdecl") @if(env::WASM);
 // fn void my_panic(String msg, String file, String func, uint line) @export("my_panic") @callconv("cdecl") @if(env::WASM) {
@@ -1147,9 +1215,8 @@ fn int main(int argc, char** args) {
 		NO_BORDER);
 
 	$if (!env::WASM):
-		$if (env::LINUX):
-			char* wl_disp = libc::getenv("WAYLAND_DISPLAY");
-			if (wl_disp != null && wl_disp[0] != '\0') {
+		$if env::LINUX:
+			if (env::tget_var("WAYLAND_DISPLAY")!!) {
 				flags |= FULLSCREEN;
 			} else {
 				flags |= MAXIMIZE;
@@ -1226,7 +1293,14 @@ fn int main(int argc, char** args) {
 			while (rgfw::window_check_event(win, &event)) {
 				switch (event.type) {
 					case rgfw::EventType.QUIT: break MAINLOOP;
+					case rgfw::EventType.FOCUS_IN: g.is_focused = true;
+					case rgfw::EventType.FOCUS_OUT: g.is_focused = false;
+					case rgfw::EventType.MOUSE_BUTTON_PRESSED:
+						if (!g.is_started) g.is_started = true;
+						g.is_focused = true;
 					case rgfw::EventType.KEY_PRESSED:
+						if (!g.is_started) g.is_started = true;
+						g.is_focused = true;
 						if (event.key.value == rgfw::Key.ESCAPE) break MAINLOOP;
 						if (event.key.value == rgfw::Key.P) g.paused = !g.paused;
 						apply_key(&g.input, event.key.value, true);

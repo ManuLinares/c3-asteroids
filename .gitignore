@@ -2,3 +2,17 @@ build/
 out/
 /scripts/RGFW
 /score.txt
+
+# Binaries and Objects
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+*.wasm
+
+# OS files
+.DS_Store
+Thumbs.db

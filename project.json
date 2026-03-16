@@ -5,7 +5,7 @@
 	"dependencies": [],
 	"authors": [ "Manuel Linares <mbarriolinares@gmail.com>" ],
 	"version": "0.1.0",
-	"sources": [ "src/**", "lib/rgfw.c3" ],
+	"sources": [ "src/**", "lib/rgfw.c3", "lib/miniaudio.c3" ],
 	"c-include-dirs": [ "deps/miniaudio" ],
 	"test-sources": [ "test/**" ],
 	"build-dir": "build",
@@ -15,11 +15,16 @@
 		"linux": {
 			"type": "executable",
 			"name": "asteroids",
-			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
-			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW.a",
+			"linked-libraries": [
+				"deps/RGFW_linux_amd64/lib/libRGFW.a",
+				"deps/miniaudio_linux_amd64/lib/libminiaudio.a",
 				"X11", "Xrandr", "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon",
-				"m", "dl", "rt", "pthread" ],
-			"exec": [ "scripts/build_rgfw_linux.sh" ]
+				"m", "dl", "rt", "pthread"
+			],
+			"exec": [
+				"scripts/build_rgfw_linux.sh",
+				"scripts/build_miniaudio.sh linux"
+			]
 		},
 		"windows": {
 			"type": "executable",
@@ -28,30 +33,28 @@
 			"link-args": [ "deps/RGFW_windows_amd64/lib/RGFW.lib", "deps/miniaudio_windows_amd64/lib/miniaudio.obj" ],
 			"linked-libraries": [ "gdi32", "shell32", "user32", "winmm" ],
 			"exec": [
-				"mkdir -p deps/miniaudio_windows_amd64/lib",
-				"clang -O3 -target x86_64-pc-windows-gnu -mno-stack-arg-probe -D__USE_MINGW_ANSI_STDIO=0 -c deps/miniaudio/miniaudio_impl.c -o deps/miniaudio_windows_amd64/lib/miniaudio.obj -Ideps/miniaudio"
+				"scripts/build_miniaudio.sh windows"
 			]
 		},
 		"web": {
 			"type": "prepare",
-			"exec": [ 
+			"exec": [
 				"scripts/build_rgfw_wasm.sh",
+				"scripts/build_miniaudio.sh wasm",
 				"scripts/build_web.sh" ]
 		},
 
 		"list_objs": {
-			"type": "object-files",
-			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ]
+			"type": "object-files"
 		},
 		"web_objs": {
 			"type": "object-files",
 			"target": "wasm32",
-			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
 			"link-libc": true,
 			"cc": "emcc"
 		}
 	},
 	"cpu": "generic",
-	"opt": "O0",
+	"opt": "O1",
 	"debug-info": "full"
 }

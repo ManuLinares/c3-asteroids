@@ -15,11 +15,13 @@ OBJS=$(find "$OBJ_DIR" -name "*.wasm")
 
 emcc $OBJS \
     "$DEPS_DIR/RGFW_wasm/lib/libRGFW_wasm.a" \
+    "$DEPS_DIR/miniaudio_wasm/lib/libminiaudio.a" \
     -o "$OUTPUT_DIR/index.html" \
     --shell-file lib/shell.html \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s ASYNCIFY=1 \
     -s "EXPORTED_RUNTIME_METHODS=['requestFullscreen', 'HEAPU8']" \
+    -s "EXPORTED_FUNCTIONS=['_main', '_wasm_start_game']" \
     -s "DEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['\$stringToNewUTF8']" \
     -O0
 

@@ -93,6 +93,12 @@
 				overlay.style.opacity = '0';
 				var req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.msRequestFullscreen;
 				if (req) req.call(document.documentElement).catch(function(e) { console.warn('Fullscreen denied:', e); });
+
+				// Tell C3 the game has started
+				if (typeof Module._wasm_start_game === 'function') {
+					Module._wasm_start_game();
+				}
+
 				// Try to resume miniaudio's WebAudio context (stored by Emscripten internally)
 				setTimeout(function() {
 					if (window.AudioContext || window.webkitAudioContext) {
