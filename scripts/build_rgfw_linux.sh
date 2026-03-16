@@ -12,9 +12,14 @@ if [ ! -d "$RGFW_DIR" ]; then
 fi
 
 cd "$RGFW_DIR"
-WAYLAND_OBJS=""
-make -f wayland.mk
 
+echo "Building Unified RGFW (X11 + Wayland)..."
+
+# 1. Generate Wayland protocols
+make -f wayland.mk protocols 2>/dev/null || make -f wayland.mk
+
+# 2. Compile Wayland protocol objects
+WAYLAND_OBJS=""
 for csrc in xdg-shell.c xdg-toplevel-icon-v1.c xdg-decoration-unstable-v1.c \
     relative-pointer-unstable-v1.c pointer-constraints-unstable-v1.c \
     xdg-output-unstable-v1.c pointer-warp-v1.c; do
@@ -25,17 +30,19 @@ for csrc in xdg-shell.c xdg-toplevel-icon-v1.c xdg-decoration-unstable-v1.c \
     fi
 done
 
-cp RGFW.h RGFW.c
-sed -i 's/#define RGFW_DEBUG/\/\/#define RGFW_DEBUG/g' RGFW.c
-cc -O3 -D RGFW_WAYLAND -fPIC -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW.o
-rm RGFW.c
+# 3. Compile RGFW with BOTH backends enabled
+# Note: RGFW_X11 and RGFW_WAYLAND together enables the dynamic backend. Test this now: TODO
+cc -O3 -D RGFW_X11 -D RGFW_WAYLAND -D RGFW_IMPLEMENTATION -x c -c RGFW.h -o RGFW.o
 
-# Bundle everything into libRGFW_wayland.a
-ar rcs libRGFW_wayland.a RGFW.o $WAYLAND_OBJS
+# 4. Bundle everything into a single libRGFW.a
+ar rcs libRGFW.a RGFW.o $WAYLAND_OBJS
 
+# 5. Setup dependencies directory
 mkdir -p "$DEPS_DIR/lib"
 mkdir -p "$DEPS_DIR/include"
-cp libRGFW_wayland.a "$DEPS_DIR/lib/"
+cp libRGFW.a "$DEPS_DIR/lib/"
 cp RGFW.h "$DEPS_DIR/include/"
 
-echo "Successfully built libRGFW_wayland.a with native Wayland support!"
+echo "------------------------------------------------"
+echo "Successfully built unified libRGFW.a! (X11 and Wayland)"
+echo "Location: $DEPS_DIR/lib/libRGFW.a"

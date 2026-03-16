@@ -12,21 +12,14 @@
 	"output": "build",
 	"script-dir": ".",
 	"targets": {
-		"linux_wl": {
+		"linux": {
 			"type": "executable",
-			"name": "asteroids_wl",
+			"name": "asteroids",
 			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
-			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW_wayland.a",
-				"m", "dl", "rt", "pthread", "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon" ],
-			"exec": [ "scripts/build_rgfw_linux_wayland.sh" ]
-		},
-		"linux_x11": {
-			"type": "executable",
-			"name": "asteroids_x11",
-			"c-sources": [ "deps/miniaudio/miniaudio_impl.c" ],
-			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW_x11.a",
-				"X11", "Xrandr", "m", "dl", "rt", "pthread" ],
-			"exec": [ "scripts/build_rgfw_linux_x11.sh" ]
+			"linked-libraries": [ "deps/RGFW_linux_amd64/lib/libRGFW.a",
+				"X11", "Xrandr", "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon",
+				"m", "dl", "rt", "pthread" ],
+			"exec": [ "scripts/build_rgfw_linux.sh" ]
 		},
 		"windows": {
 			"type": "executable",
@@ -59,6 +52,6 @@
 		}
 	},
 	"cpu": "generic",
-	"opt": "O3",
-	"debug-info": "none"
+	"opt": "O0",
+	"debug-info": "full"
 }

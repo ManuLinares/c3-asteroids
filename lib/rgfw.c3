@@ -257,6 +257,7 @@ struct Surface {
 }
 
 extern fn Surface* window_create_surface(Window* win, char* data, usz width, usz height, Format format) @cname("RGFW_window_createSurface");
+extern fn Surface* create_surface(char* data, int width, int height, Format format) @cname("RGFW_createSurface");
 extern fn void window_blit_surface(Window* win, Surface* surface) @cname("RGFW_window_blitSurface");
 extern fn void surface_free(Surface* surface) @cname("RGFW_surface_free");
 
