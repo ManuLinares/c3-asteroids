@@ -1,6 +1,6 @@
 # Asteroids
 
-Asteroids clone written in C3. Software-rendered. Window and input via [RGFW](https://github.com/ColleagueRiley/RGFW).
+Asteroids clone written in C3. Software-rendered. Window and input via [RGFW](https://github.com/ColleagueRiley/RGFW). Audio via [miniaudio](https://miniaud.io).
 
 You can play it in the browser: https://manulinares.github.io/c3-asteroids/
 
@@ -11,32 +11,32 @@ You can play it in the browser: https://manulinares.github.io/c3-asteroids/
 ## Dependencies
 
 - [C3 compiler](https://c3-lang.org) (`c3c` in PATH)
-- On Linux: `gcc`, `clang` + `mingw-w64` (for Windows cross-compilation), `wayland-scanner`, `git`, and the usual Wayland/X11 dev libraries depending on the target
-- For Web: [Emscripten](https://emscripten.org/)
+- On Linux: `gcc`, `clang`, `wayland-scanner`, `git`, and dev libraries for X11/Wayland.
+- For Windows cross-compilation: `mingw-w64`.
+- For Web: [Emscripten](https://emscripten.org/).
 
-## Build
+## Build and Run
 
-### Linux
+The build system automatically compiles necessary C dependencies on the first run.
 
-Build the RGFW library:
+### Linux (X11/Wayland)
 
 ```sh
-c3c build deps-wayland --trust=full #or `c3c build deps-x11 --trust=full` for X11
-c3c build asteroids_linux_wayland
+c3c run linux --trust=full
 ```
 
 ### Web (WASM)
 
 ```sh
-c3c build deps-web --trust=full
-c3c build asteroids_web --trust=full
+c3c build web --trust=full
+# Serve the build/ directory using any local web server
 ```
 
 ### Windows (Cross-compilation from Linux)
 
 ```sh
-c3c build deps-windows --trust=full
-c3c build asteroids_windows
+c3c build windows --trust=full
+# Run the resulting asteroids.exe
 ```
 
 ## Controls
@@ -50,6 +50,6 @@ c3c build asteroids_windows
 | P | Pause |
 | C | Cheat mode |
 
-
-> [!NOTE]
-> Windows cross-compilation requires `clang` to build the miniaudio dependency.
+---
+> [!TIP]
+> Use `--trust=full` when running/building to allow the `project.json` to execute the dependency build scripts.
