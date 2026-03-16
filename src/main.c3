@@ -158,7 +158,7 @@ fn void Game.init(&self, bool full_reset) {
 
 	self.ship_pos   = {0, 0, 0};
 	self.ship_vel   = {0, 0, 0};
-	self.ship_rot   = QUATERNIONF_IDENTITY;
+	self.ship_rot   = quaternion::IDENTITY;
 	self.cam_pos    = self.ship_pos;
 
 	self.thrust_acc = 0.006f;
@@ -369,7 +369,7 @@ fn void Asteroid.spawn(&self, float[<3>] pos, float[<3>] vel, AsteroidSize size,
 	self.vel = vel;
 	self.size = size;
 
-	self.radius = (float)((int)size + 1) * 0.4f;
+	self.radius = ((int)size + 1f) * 0.4f;
 	self.rot = 0;
 	self.rot_vel = ((float)(seed % 100u) / 100.0f - 0.5f) * 0.1f;
 
@@ -1152,18 +1152,16 @@ extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
 
 extern fn void trap() @extern("abort") @callconv("cdecl") @if(env::WASM);
 
-fn void my_panic(String msg, String file, String func, uint line) @export("my_panic") @callconv("cdecl") @if(env::WASM) {
-	io::printn("!!! PANIC !!!");
-	io::printn(msg);
-	trap();
-}
+// fn void my_panic(String msg, String file, String func, uint line) @export("my_panic") @callconv("cdecl") @if(env::WASM) {
+// 	io::printn("!!! PANIC !!!");
+// 	io::printn(msg);
+// 	trap();
+// }
 
 fn int main(int argc, char** args) {
-	$if (env::WASM):
-		builtin::panic = &my_panic;
-	$endif
-
-	io::printn("Main started");
+	// $if (env::WASM):
+	// 	builtin::panic = &my_panic;
+	// $endif
 
 	if (audio::audio_init() != 0) {
 		io::printn("Failed to initialize audio!");
@@ -1176,21 +1174,22 @@ fn int main(int argc, char** args) {
 		rgfw::use_wayland(true);
 	$endif
 
-	uint flags = (uint)(rgfw::WindowFlags.HIDE_MOUSE |
-		rgfw::WindowFlags.ALLOW_DND |
-		rgfw::WindowFlags.FOCUS |
-		rgfw::WindowFlags.FOCUS_ON_SHOW);
+	WindowFlags flags = ( 
+		HIDE_MOUSE | 
+		ALLOW_DND |
+		FOCUS |
+		FOCUS_ON_SHOW);
 
 	$if (!env::WASM):
-		flags |= (uint)rgfw::WindowFlags.FULLSCREEN;
+		flags |= FULLSCREEN;
 	$endif
 
 	usz w = 1920;
 	usz h = 1080;
 
-	rgfw::Window* win = rgfw::create_window("Software Asteroids", 0, 0, (int)w, (int)h, (rgfw::WindowFlags)flags);
-
+	rgfw::Window* win = rgfw::create_window("Software Asteroids", 0, 0, (int)w, (int)h, flags);
 	if (!win) { io::printn("Failed to create window!"); return 1; }
+
 	int rw, rh;
 	rgfw::window_get_size(win, &rw, &rh);
 	if (rw > 0 && rh > 0) {
@@ -1198,7 +1197,7 @@ fn int main(int argc, char** args) {
 		h = (usz)rh;
 	}
 
-	Color* buffer = (Color*)mem::malloc(w * h * Color.sizeof);
+	Color* buffer = mem::malloc(w * h * Color.sizeof);
 	if (!buffer) { io::printn("Failed to allocate buffer"); return 1; }
 	$if (!env::WASM):
 		defer mem::free(buffer);
@@ -1214,7 +1213,7 @@ fn int main(int argc, char** args) {
 		rgfw::window_set_fullscreen(win, true);
 	$endif
 
-	if (env::WASM) {
+	$if (env::WASM):
 		web_ctx.g.load_best_score();
 		web_ctx.g.init(true);
 		web_ctx.g.scale = (float)h / 4.0f;
@@ -1226,52 +1225,53 @@ fn int main(int argc, char** args) {
 		web_ctx.last_time = get_time_ns();
 		web_ctx.accumulator = 0.0;
 		emscripten_set_main_loop_arg(&web_frame, &web_ctx, 60, 0);
-		return 0;
-	}
+	$else
 
-	Game g;
-	g.load_best_score();
-	g.init(true);
-	g.scale = (float)h / 4.0f;
+		Game g;
+		g.load_best_score();
+		g.init(true);
+		g.scale = (float)h / 4.0f;
 
-	rgfw::Event event;
+		rgfw::Event event;
 
-	const double DT = 1.0 / 60.0;
-	const long DT_NS = (long)(DT * 1_000_000_000.0);
-	double accumulator = 0.0;
-	long last_time = get_time_ns();
+		const double DT = 1.0 / 60.0;
+		const long DT_NS = (long)(DT * 1_000_000_000.0);
+		double accumulator = 0.0;
+		long last_time = get_time_ns();
 
-	while MAINLOOP: (!rgfw::window_should_close(win)) {
-		long current_time = get_time_ns();
-		double dt = (double)(current_time - last_time) / 1_000_000_000.0;
-		if (dt > 0.25) dt = 0.25;
-		last_time = current_time;
+		while MAINLOOP: (!rgfw::window_should_close(win)) {
+			long current_time = get_time_ns();
+			double dt = (double)(current_time - last_time) / 1_000_000_000.0;
+			if (dt > 0.25) dt = 0.25;
+			last_time = current_time;
 
-		while (rgfw::window_check_event(win, &event)) {
-			switch (event.type) {
-				case rgfw::EventType.QUIT: break MAINLOOP;
-				case rgfw::EventType.KEY_PRESSED:
-					if (event.key.value == rgfw::Key.ESCAPE) break MAINLOOP;
-					if (event.key.value == rgfw::Key.P) g.paused = !g.paused;
-					apply_key(&g.input, event.key.value, true);
-				case rgfw::EventType.KEY_RELEASED:
-					apply_key(&g.input, event.key.value, false);
-				default:
+			while (rgfw::window_check_event(win, &event)) {
+				switch (event.type) {
+					case rgfw::EventType.QUIT: break MAINLOOP;
+					case rgfw::EventType.KEY_PRESSED:
+						if (event.key.value == rgfw::Key.ESCAPE) break MAINLOOP;
+						if (event.key.value == rgfw::Key.P) g.paused = !g.paused;
+						apply_key(&g.input, event.key.value, true);
+					case rgfw::EventType.KEY_RELEASED:
+						apply_key(&g.input, event.key.value, false);
+					default:
+				}
 			}
+
+			g.run_frame(dt, &accumulator, buffer, w, h, win, surface);
+
+			$if (!env::WASM):
+				long now = get_time_ns();
+				long work_done = now - last_time;
+				long target = g.paused ? (long)100_000_000 : DT_NS;
+				if (work_done < target) {
+					thread::sleep_ns((NanoDuration)(target - work_done));
+				}
+			$endif
 		}
 
-		g.run_frame(dt, &accumulator, buffer, w, h, win, surface);
+		g.save_best_score();
+	$endif;
 
-		$if (!env::WASM):
-			long now = get_time_ns();
-			long work_done = now - last_time;
-			long target = g.paused ? (long)100_000_000 : DT_NS;
-			if (work_done < target) {
-				thread::sleep_ns((NanoDuration)(target - work_done));
-			}
-		$endif
-	}
-
-	g.save_best_score();
 	return 0;
 }

@@ -27,7 +27,7 @@ done
 
 cp RGFW.h RGFW.c
 sed -i 's/#define RGFW_DEBUG/\/\/#define RGFW_DEBUG/g' RGFW.c
-cc -O3 -D RGFW_UNIX -D RGFW_WAYLAND -fPIC -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW.o
+cc -O3 -D RGFW_WAYLAND -fPIC -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW.o
 rm RGFW.c
 
 # Bundle everything into libRGFW_wayland.a

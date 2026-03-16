@@ -24,7 +24,6 @@ Build the RGFW library:
 c3c build deps-wayland --trust=full #or `c3c build deps-x11 --trust=full` for X11
 c3c build asteroids_linux_wayland
 ```
-<small>run `./build/asteroids_linux_wayland`</small>
 
 ### Web (WASM)
 
@@ -32,7 +31,6 @@ c3c build asteroids_linux_wayland
 c3c build deps-web --trust=full
 c3c build asteroids_web --trust=full
 ```
-<small>open `build/asteroids.html` in a browser</small>
 
 ### Windows (Cross-compilation from Linux)
 
@@ -40,25 +38,18 @@ c3c build asteroids_web --trust=full
 c3c build deps-windows --trust=full
 c3c build asteroids_windows
 ```
-<small>run `build/asteroids_windows.exe`</small>
-
-> [!NOTE]
-> Windows cross-compilation requires `clang` to build the miniaudio dependency.
 
 ## Controls
 
 | Key | Action |
 |-----|--------|
-| W / Up | Thrust |
-| A / Left | Rotate left |
-| S / Down | Brake |
-| D / Right | Rotate right |
+| WASD/Arrow Keys | Thrust, Rotate, Brake |
 | Space | Fire |
 | E | Hyperspace |
 | Escape | Quit |
 | P | Pause |
 | C | Cheat mode |
 
-#### Notes
 
-This needs https://github.com/c3lang/c3c/issues/3040 to build and adding `import libc;` to c3 stdlib  `lib/std/threads/os/thread_none.c3`
+> [!NOTE]
+> Windows cross-compilation requires `clang` to build the miniaudio dependency.

@@ -42,25 +42,21 @@ jobs:
         run: |
           curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-linux.tar.gz | tar xz
           echo "$(pwd)/c3" >> $GITHUB_PATH
-          chmod +x c3/c3c
-          # Hotfix for std::threads::os::thread_none (missing libc import for Web)
-          sed -i '/^module std::thread::os/a import libc;' c3/lib/std/threads/os/thread_none.c3
 
-      # - name: Setup Emscripten
-      #   uses: mymindstorm/setup-emsdk@v14
-      #   with:
-      #     version: latest
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
 
-      - name: Build RGFW
-        run: |
-          c3c build deps-wayland --trust=full
-          c3c build deps-x11 --trust=full
-          # c3c build deps-web --trust=full
+      # - name: Build RGFW
+      #   run: |
+      #     c3c build deps-wayland --trust=full
+      #     c3c build deps-x11 --trust=full
 
       - name: Build Linux Targets
         run: |
-          c3c build asteroids_linux_wayland
-          c3c build asteroids_linux_x11
+          c3c build linux_wl --trust=full
+          c3c build linux_x11 --trust=full
 
       - name: Cache MSVC SDK
         id: cache-msvc
@@ -76,32 +72,27 @@ jobs:
           else
             echo "Using cached MSVC SDK."
           fi
-          c3c build deps-windows --trust=full
-          c3c build asteroids_windows
+
+          c3c build windows --trust=full
 
       - name: Build Web Target
         run: |
-          # c3c build asteroids_web --trust=full
-          echo "Using pre-built web assets from 'web' folder"
+          c3c build web --trust=full
 
       - name: Package Release
         run: |
           mkdir -p release/asteroids_linux_wayland release/asteroids_linux_x11 release/asteroids_windows release/asteroids_web
           
           # Linux
-          cp build/asteroids_linux_wayland release/asteroids_linux_wayland/
-          cp build/asteroids_linux_x11 release/asteroids_linux_x11/
+          cp build/asteroids_wl release/asteroids_linux_wayland/
+          cp build/asteroids_x11 release/asteroids_linux_x11/
           
           # Windows
-          cp build/asteroids_windows.exe release/asteroids_windows/
+          cp build/asteroids.exe release/asteroids_windows/
           
           # Web
-          #cp build/asteroids.html build/asteroids.js build/asteroids.wasm release/asteroids_web/
-          #cp build/asteroids.html release/asteroids_web/index.html
+          cp preview.png build/index.html build/index.js build/index.wasm release/asteroids_web/
 
-          # Web (Use pre-built files from web/ folder)
-          cp web/asteroids.html web/asteroids.js web/asteroids.wasm web/index.html release/asteroids_web/
-          
           # Zip them up
           cd release
           zip -r ../asteroids_linux_wayland.zip asteroids_linux_wayland
@@ -125,8 +116,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
-          # path: release/asteroids_web/
-          path: web/
+          path: release/asteroids_web/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

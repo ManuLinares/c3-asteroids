@@ -15,7 +15,7 @@ cd "$RGFW_DIR"
 
 echo "Compiling RGFW for WASM (Emscripten)..."
 cp RGFW.h RGFW.c
-emcc -s ASYNCIFY=1 -O3 -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW_wasm.o
+emcc -O3 -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW_wasm.o
 rm RGFW.c
 
 emar rcs libRGFW_wasm.a RGFW_wasm.o
