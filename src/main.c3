@@ -14,31 +14,51 @@ import std::os;
 
 typedef Color = char[<4>];
 
+const float NEON_GLOW_INTENSITY_1 = 0.8f;
+const float NEON_GLOW_INTENSITY_2 = 0.4f;
+const int   NEON_LINE_THICKNESS   = 1;
+
 const Color BLACK = {0, 0, 0, 255};
 const Color GREEN = {0, 255, 0, 255};
 const Color WHITE          = {255, 255, 255, 255};
 const Color ASTEROID_COLOR = {160, 160, 160, 255};
 const Color ENEMY_COLOR    = {255, 100, 255, 255};
+const int PROJECT_ERROR     = -1000000;
 
-const float[<3>][4] SHIP_VERTS = {
+const float[<3>][5] SHIP_VERTS = {
 	{0.0f,  0.0f,  1.0f},
-	{-0.6f, 0.0f, -0.6f},
-	{0.6f,  0.0f, -0.6f},
-	{0.0f,  0.0f, -0.2f}
+	{-0.6f, -0.3f, -0.6f},
+	{0.6f,  -0.3f, -0.6f},
+	{0.0f,  0.3f,  -0.6f},
+	{0.0f,  0.0f,  -0.2f}
 };
 
-const float[<3>][6] SAUCER_VERTS = {
+const float[<3>][8] SAUCER_VERTS = {
 	{-1.0f, 0.0f,  0.0f},
+	{-0.5f, 0.0f, -0.8f},
+	{ 0.5f, 0.0f, -0.8f},
 	{ 1.0f, 0.0f,  0.0f},
-	{-0.5f, 0.0f, -0.5f},
-	{ 0.5f, 0.0f, -0.5f},
-	{-0.5f, 0.0f,  0.5f},
-	{ 0.5f, 0.0f,  0.5f}
+	{ 0.5f, 0.0f,  0.8f},
+	{-0.5f, 0.0f,  0.8f},
+	{ 0.0f, 0.5f,  0.0f},
+	{ 0.0f, -0.5f, 0.0f}
 };
 
-const int[2][] SHIP_LINES     = { {0,1}, {0,2}, {1,3}, {2,3}, {1,2} };
-const int[2][] SAUCER_LINES   = { {0,1}, {2,3}, {4,5}, {0,2}, {1,3}, {0,4}, {1,5} };
-const int[2][] ASTEROID_LINES = { {0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,6}, {6,7}, {7,0} };
+const int[2][] SHIP_LINES     = {
+	{0,1}, {0,2}, {0,3},
+	{1,2}, {2,3}, {3,1},
+	{1,4}, {2,4}, {3,4}
+};
+const int[2][] SAUCER_LINES   = {
+	{0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,0},
+	{6,0}, {6,1}, {6,2}, {6,3}, {6,4}, {6,5},
+	{7,0}, {7,1}, {7,2}, {7,3}, {7,4}, {7,5}
+};
+const int[2][] ASTEROID_LINES = {
+	{0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,0},
+	{6,7}, {7,8}, {8,9}, {9,10}, {10,11}, {11,6},
+	{0,6}, {1,7}, {2,8}, {3,9}, {4,10}, {5,11}
+};
 
 bitstruct Input : ushort {
 	bool forward : 0;
@@ -87,7 +107,7 @@ struct Asteroid {
 	float radius;
 	float rot;
 	float rot_vel;
-	float[<3>][8] verts;
+	float[<3>][12] verts;
 	AsteroidSize size;
 	bool active;
 }
@@ -131,10 +151,13 @@ const usz MAX_ASTEROIDS = 128;
 struct Game {
 	float[<3>] ship_pos;
 	float[<3>] ship_vel;
+	float      ship_yaw;
+	float      ship_bank;
 	Quaternionf ship_rot;
 	float[<3>] cam_pos;
 	float cam_yaw;
 	float cam_pitch;
+	float cam_focal_dist;
 	Quaternionf cam_rot;
 	uint frame;
 	uint shoot_cooldown;
@@ -169,7 +192,7 @@ struct Game {
 	Particle[MAX_PARTICLES] particles;
 	Bullet[MAX_BULLETS]     bullets;
 	Asteroid[MAX_ASTEROIDS] asteroids;
-	Debris[5]               ship_pieces;
+	Debris[9]               ship_pieces;
 
 	uint thump_timer;
 	uint thump_interval;
@@ -197,10 +220,13 @@ fn void Game.init(&self, bool full_reset) {
 
 	self.ship_pos   = {0, 0, 0};
 	self.ship_vel   = {0, 0, 0};
+	self.ship_yaw   = 0.0f;
+	self.ship_bank  = 0.0f;
 	self.ship_rot   = quaternion::IDENTITY;
 	self.cam_pos    = { self.ship_pos.x, 20.0f, self.ship_pos.z };
 	self.cam_yaw    = 0.0f;
 	self.cam_pitch  = 1.57f;
+	self.cam_focal_dist = 40.0f;
 	self.cam_rot    = quaternion::from_euler(self.cam_pitch, self.cam_yaw, 0.0f);
 
 	self.thrust_acc = SHIP_THRUST_ACC;
@@ -218,11 +244,6 @@ fn void Game.init(&self, bool full_reset) {
 	self.saucer.active = false;
 	self.cheat_mode = false;
 	self.is_focused = true;
-	$if env::WASM:
-		self.is_started = false;
-	$else
-		self.is_started = true;
-	$endif
 }
 
 fn void Game.load_best_score(&self) {
@@ -255,7 +276,7 @@ fn void Game.save_best_score(&self) {
 	$endif
 }
 
-fn void Game.trigger_death(&self, float[<3>][4] world_v) {
+fn void Game.trigger_death(&self, float[<3>][5] world_v) {
 	if (self.is_dead || self.is_won || self.cheat_mode) return;
 
 	self.is_dead = true;
@@ -263,8 +284,7 @@ fn void Game.trigger_death(&self, float[<3>][4] world_v) {
 	self.death_timer = 0.0f;
 	audio::audio_play_explosion(1.5f);
 
-	int[2][5] edges = {{0,1}, {0,2}, {1,3}, {2,3}, {1,2}};
-	foreach (i, edge : edges) {
+	foreach (i, edge : SHIP_LINES) {
 		Debris* d = &self.ship_pieces[i];
 		d.p1 = world_v[edge[0]];
 		d.p2 = world_v[edge[1]];
@@ -401,9 +421,9 @@ fn void Game.spawn_wave(&self) {
 		pos.xz = (float[<2>]){math::cos(angle), math::sin(angle)} * dist;
 
 		float[<3>] vel = {};
-		float[<2>] rand_vec = {(float)((h >> 16) & 0xFFu), (float)((h >> 24) & 0xFFu)};
+		float[<2>] rand_vec = {(float)((h >> 20) & 0xFFu), (float)((h >> 24) & 0xFFu)};
 		vel.xz = (rand_vec / 255.0f - 0.5f) * (0.03f + (float)self.wave * 0.005f);
-
+		vel.y = 0.0f;
 		a.spawn(pos, vel, AsteroidSize.LARGE, (uint)h);
 	}
 }
@@ -418,12 +438,16 @@ fn void Asteroid.spawn(&self, float[<3>] pos, float[<3>] vel, AsteroidSize size,
 	self.rot = 0;
 	self.rot_vel = ((float)(seed % 100u) / 100.0f - 0.5f) * 0.1f;
 
-	for (int j = 0; j < 8; j++) {
-		float va = (float)j * 3.14159f * 2.0f / 8.0f;
+	for (int j = 0; j < 6; j++) {
+		float va = (float)j * 3.14159f * 2.0f / 6.0f;
 		ulong vh = wyhash2::hash(((char*)&j)[:int.sizeof], (ulong)seed);
-		float vr = self.radius * (0.7f + (float)(vh % 30u) * 0.02f);
-		self.verts[j] = {};
-		self.verts[j].xz = (float[<2>]){math::cos(va), math::sin(va)} * vr;
+		float vr = self.radius * (0.8f + (float)(vh % 40u) * 0.01f);
+
+		self.verts[j] = { math::cos(va) * vr, -self.radius * 0.6f, math::sin(va) * vr };
+
+		ulong vh2 = wyhash2::hash(((char*)&j)[:int.sizeof], (ulong)seed ^ 0x12345678);
+		float vr2 = self.radius * (0.8f + (float)(vh2 % 40u) * 0.01f);
+		self.verts[j+6] = { math::cos(va) * vr2, self.radius * 0.6f, math::sin(va) * vr2 };
 	}
 }
 
@@ -462,7 +486,104 @@ fn bool draw_pixel(Color* buf, usz[<2>] size, int[<2>] pos, Color c, bool check_
 	return false;
 }
 
+fn void draw_pixel_add(Color* buf, usz[<2>] size, int[<2>] pos, Color c) {
+	if (pos.x >= 0 && pos.y >= 0 && pos.x < (int)size.x && pos.y < (int)size.y) {
+		usz idx = (usz)pos.y * size.x + (usz)pos.x;
+		uint r = ((uint)buf[idx].x & 0xFFu) + ((uint)c.x & 0xFFu);
+		uint g = ((uint)buf[idx].y & 0xFFu) + ((uint)c.y & 0xFFu);
+		uint b = ((uint)buf[idx].z & 0xFFu) + ((uint)c.z & 0xFFu);
+		buf[idx].x = (char)(r > 255 ? 255 : r);
+		buf[idx].y = (char)(g > 255 ? 255 : g);
+		buf[idx].z = (char)(b > 255 ? 255 : b);
+	}
+}
+
+fn void draw_line_add(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color color) {
+	if (p0.x == PROJECT_ERROR || p1.x == PROJECT_ERROR) return;
+	int[<2>] d = math::abs(p1 - p0);
+	int[<2>] s = { p0.x < p1.x ? 1 : -1, p0.y < p1.y ? 1 : -1 };
+	int err = d.x - d.y;
+	while (true) {
+		draw_pixel_add(buf, size, p0, color);
+		if (p0 == p1) break;
+		int e2 = 2 * err;
+		if (e2 > -d.y) { err -= d.y; p0.x += s.x; }
+		if (e2 <  d.x) { err += d.x; p0.y += s.y; }
+	}
+}
+
+fn bool draw_line_hit_test(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1) {
+	if (p0.x == PROJECT_ERROR || p1.x == PROJECT_ERROR) return false;
+	int[<2>] d = math::abs(p1 - p0);
+	int[<2>] s = { p0.x < p1.x ? 1 : -1, p0.y < p1.y ? 1 : -1 };
+	int err = d.x - d.y;
+	while (true) {
+		if (p0.x >= 0 && p0.y >= 0 && p0.x < (int)size.x && p0.y < (int)size.y) {
+			usz idx = (usz)p0.y * size.x + (usz)p0.x;
+
+			if (buf[idx].xyz == ASTEROID_COLOR.xyz) return true;
+			if (buf[idx].xyz == ENEMY_COLOR.xyz) return true;
+		}
+		if (p0 == p1) break;
+		int e2 = 2 * err;
+		if (e2 > -d.y) { err -= d.y; p0.x += s.x; }
+		if (e2 <  d.x) { err += d.x; p0.y += s.y; }
+	}
+	return false;
+}
+
+fn void draw_line_thick(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color color, bool check_collision) {
+	if (p0.x == PROJECT_ERROR || p1.x == PROJECT_ERROR) return;
+	draw_line(buf, size, p0, p1, color, check_collision);
+	if (NEON_LINE_THICKNESS > 0) {
+		for (int i = 1; i <= NEON_LINE_THICKNESS; i++) {
+			draw_line(buf, size, p0 + (int[<2>]){i, 0}, p1 + (int[<2>]){i, 0}, color, check_collision);
+			draw_line(buf, size, p0 + (int[<2>]){-i, 0}, p1 + (int[<2>]){-i, 0}, color, check_collision);
+			draw_line(buf, size, p0 + (int[<2>]){0, i}, p1 + (int[<2>]){0, i}, color, check_collision);
+			draw_line(buf, size, p0 + (int[<2>]){0, -i}, p1 + (int[<2>]){0, -i}, color, check_collision);
+		}
+	}
+}
+
+fn bool draw_line_glow(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color color, bool check_collision) {
+	if (p0.x == PROJECT_ERROR || p1.x == PROJECT_ERROR) return false;
+
+	bool hit = false;
+	if (check_collision) {
+		hit = draw_line_hit_test(buf, size, p0, p1);
+	}
+
+	uint cr = (uint)color.x & 0xFFu;
+	uint cg = (uint)color.y & 0xFFu;
+	uint cb = (uint)color.z & 0xFFu;
+
+	Color g1 = { (char)((float)cr * NEON_GLOW_INTENSITY_1),
+				 (char)((float)cg * NEON_GLOW_INTENSITY_1),
+				 (char)((float)cb * NEON_GLOW_INTENSITY_1), 255 };
+	Color g2 = { (char)((float)cr * NEON_GLOW_INTENSITY_2),
+				 (char)((float)cg * NEON_GLOW_INTENSITY_2),
+				 (char)((float)cb * NEON_GLOW_INTENSITY_2), 255 };
+
+	draw_line_add(buf, size, p0 + (int[<2>]){2, 0}, p1 + (int[<2>]){2, 0}, g2);
+	draw_line_add(buf, size, p0 + (int[<2>]){-2, 0}, p1 + (int[<2>]){-2, 0}, g2);
+	draw_line_add(buf, size, p0 + (int[<2>]){0, 2}, p1 + (int[<2>]){0, 2}, g2);
+	draw_line_add(buf, size, p0 + (int[<2>]){0, -2}, p1 + (int[<2>]){0, -2}, g2);
+
+	draw_line_add(buf, size, p0 + (int[<2>]){1, 0}, p1 + (int[<2>]){1, 0}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){-1, 0}, p1 + (int[<2>]){-1, 0}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){0, 1}, p1 + (int[<2>]){0, 1}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){0, -1}, p1 + (int[<2>]){0, -1}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){1, 1}, p1 + (int[<2>]){1, 1}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){-1, -1}, p1 + (int[<2>]){-1, -1}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){1, -1}, p1 + (int[<2>]){1, -1}, g1);
+	draw_line_add(buf, size, p0 + (int[<2>]){-1, 1}, p1 + (int[<2>]){-1, 1}, g1);
+
+	draw_line_thick(buf, size, p0, p1, color, false);
+	return hit;
+}
+
 fn bool draw_line(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color color, bool check_collision) {
+	if (p0.x == PROJECT_ERROR || p1.x == PROJECT_ERROR) return false;
 	int[<2>] d = math::abs(p1 - p0);
 	int[<2>] s = { p0.x < p1.x ? 1 : -1, p0.y < p1.y ? 1 : -1 };
 	int err = d.x - d.y;
@@ -478,17 +599,19 @@ fn bool draw_line(Color* buf, usz[<2>] size, int[<2>] p0, int[<2>] p1, Color col
 }
 
 fn void draw_star(Color* buf, usz[<2>] size, int[<2>] pos, int arm, Color color, bool check_collision) {
-	draw_pixel(buf, size, pos, color, check_collision);
+	if (pos.x == PROJECT_ERROR) return;
+	draw_pixel_add(buf, size, pos, color);
 	for (int i = -arm; i <= arm; i++) {
-		draw_pixel(buf, size, pos + {i, 0}, color, check_collision);
-		draw_pixel(buf, size, pos + {0, i}, color, check_collision);
+		if (i == 0) continue;
+		draw_pixel_add(buf, size, pos + {i, 0}, color);
+		draw_pixel_add(buf, size, pos + {0, i}, color);
 	}
 }
 
 fn bool draw_lines(Color* buf, usz[<2>] size, int[<2>][] pts, int[2][] indices, Color c, bool collision) {
 	bool hit = false;
 	foreach (idx : indices) {
-		if (draw_line(buf, size, pts[idx[0]], pts[idx[1]], c, collision)) hit = true;
+		if (draw_line_glow(buf, size, pts[idx[0]], pts[idx[1]], c, collision)) hit = true;
 	}
 	return hit;
 }
@@ -507,14 +630,13 @@ fn int[<2>] to_screen(float[<2>] rel, float scale, usz[<2>] size) {
 }
 
 fn float[<3>] get_cam_space_rel(float[<3>] rel_to_ship, Game* g) {
-	// Everything is rotated relative to the ship's position
 	return g.cam_rot.conjugate() * rel_to_ship;
 }
 
 fn int[<2>] project_cam_space(float[<3>] cam_space, Game* g, usz[<2>] size) {
-	float dist = 40.0f;
+	float dist = g.cam_focal_dist;
 	float z = cam_space.z + dist;
-	if (z < 0.1f) z = 0.1f;
+	if (z < 1.0f) return { PROJECT_ERROR, PROJECT_ERROR };
 	float fov_scale = dist / z;
 	return to_screen({ cam_space.x * fov_scale, cam_space.y * fov_scale }, g.scale, size);
 }
@@ -608,7 +730,7 @@ fn void draw_text(Color* buf, usz[<2>] size, int[<2>] pos, int text_size, char* 
 				FontLine line = FONT_DATA[idx][l];
 				int[<2>] p1 = { cur_x + (int)(line.x1 * (float)text_size), pos.y + (int)(line.y1 * (float)text_size) };
 				int[<2>] p2 = { cur_x + (int)(line.x2 * (float)text_size), pos.y + (int)(line.y2 * (float)text_size) };
-				draw_line(buf, size, p1, p2, c, false);
+				draw_line_glow(buf, size, p1, p2, c, false);
 			}
 		}
 		cur_x += text_size * 4;
@@ -685,10 +807,20 @@ fn void update(Game* g) {
 	g.ship_vel *= drag;
 
 	g.ship_pos += g.ship_vel;
+	g.ship_pos.y = 0.0f;
 
 	if (!g.is_dead && !g.game_over && !g.is_won) {
-		if (g.input.left)    g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0},  g.rot_speed);
-		if (g.input.right)   g.ship_rot = g.ship_rot * quaternion::from_axis_angle({0, 1, 0}, -g.rot_speed);
+		float target_bank = 0.0f;
+		if (g.input.left) {
+			g.ship_yaw += g.rot_speed;
+			target_bank = 0.5f;
+		}
+		if (g.input.right) {
+			g.ship_yaw -= g.rot_speed;
+			target_bank = -0.5f;
+		}
+		g.ship_bank += (target_bank - g.ship_bank) * 0.1f;
+		g.ship_rot = quaternion::from_euler(0.0f, g.ship_yaw, g.ship_bank);
 	}
 
 	static bool hyperspace_last = false;
@@ -709,7 +841,7 @@ fn void update(Game* g) {
 		ulong hx = wyhash2::hash(((char*)&g.frame)[:uint.sizeof], (ulong)get_time_ns());
 
 		if ((hx % 100u) < 10u) {
-			float[<3>][4] boom_v;
+			float[<3>][5] boom_v;
 			foreach (vi, v : SHIP_VERTS) boom_v[vi] = g.ship_pos + (g.ship_rot * v);
 			g.trigger_death(boom_v);
 
@@ -797,10 +929,11 @@ fn void update(Game* g) {
 	wrap(&g.ship_pos);
 
 	foreach (&p : g.particles) if (p.life > 0.0f) { p.pos += p.vel; p.life -= 0.02f; }
-	foreach (&b : g.bullets)   if (b.life > 0.0f) { b.pos += b.vel; wrap(&b.pos); b.life--; }
+	foreach (&b : g.bullets)   if (b.life > 0.0f) { b.pos += b.vel; b.pos.y = 0; wrap(&b.pos); b.life--; }
 	foreach (&a : g.asteroids) {
 		if (!a.active) continue;
 		a.pos += a.vel;
+		a.pos.y = 0;
 		a.rot += a.rot_vel;
 		wrap(&a.pos);
 	}
@@ -876,7 +1009,8 @@ fn void update(Game* g) {
 		foreach (&a : g.asteroids) {
 			if (!a.active) continue;
 			float dist_sq = toroidal_dist_sq(b.pos, a.pos);
-			if (dist_sq < a.radius * a.radius) {
+			float coll_rad = a.radius * 1.5f;
+			if (dist_sq < coll_rad * coll_rad) {
 				b.life = 0;
 				g.destroy_asteroid(a, b.vel, b.from_ship);
 				break;
@@ -884,7 +1018,7 @@ fn void update(Game* g) {
 		}
 		if (g.saucer.active && b.from_ship) {
 			float sd = toroidal_dist_sq(b.pos, g.saucer.pos);
-			if (sd < 0.8f * 0.8f) {
+			if (sd < 1.2f * 1.2f) {
 				b.life = 0;
 				g.trigger_saucer_death(true);
 				break;
@@ -894,8 +1028,8 @@ fn void update(Game* g) {
 
 	g.cam_pos = { g.ship_pos.x, 20.0f, g.ship_pos.z };
 
-	if (g.input.cam_yaw_l)   g.cam_yaw   += 0.05f;
-	if (g.input.cam_yaw_r)   g.cam_yaw   -= 0.05f;
+	if (g.input.cam_yaw_l)   g.cam_yaw   -= 0.05f;
+	if (g.input.cam_yaw_r)   g.cam_yaw   += 0.05f;
 	if (g.input.cam_pitch_u) g.cam_pitch -= 0.05f;
 	if (g.input.cam_pitch_d) g.cam_pitch += 0.05f;
 
@@ -905,6 +1039,10 @@ fn void update(Game* g) {
 	float target_scale = 45.0f - speed_mag * 60.0f;
 	if (target_scale < 30.0f) target_scale = 30.0f;
 	g.scale += (target_scale - g.scale) * 0.05f;
+
+	float target_focal = 40.0f - speed_mag * 50.0f;
+	if (target_focal < 20.0f) target_focal = 20.0f;
+	g.cam_focal_dist += (target_focal - g.cam_focal_dist) * 0.05f;
 
 	audio::audio_set_saucer(g.saucer.active, g.saucer.type == SaucerType.BIG);
 
@@ -933,23 +1071,34 @@ fn void draw_grid(Game* g, Color* buf, usz[<2>] size) {
 	int cell_x = (int)math::floor(g.cam_pos.x / SPACING);
 	int cell_z = (int)math::floor(g.cam_pos.z / SPACING);
 
-	for (int gx = cell_x - 18; gx <= cell_x + 18; gx++) {
-		for (int gz = cell_z - 18; gz <= cell_z + 18; gz++) {
-			int[2] key = { (gx % GRID_DIM + GRID_DIM) % GRID_DIM,
-						   (gz % GRID_DIM + GRID_DIM) % GRID_DIM };
-			ulong hv = wyhash2::hash(((char*)&key)[:int[2].sizeof]);
+	for (int layer = -6; layer <= 6; layer++) {
+		float y_off = (float)layer * 12.0f;
+		int range = (layer == 0) ? 20 : 16;
 
-			float ox = ((float)(hv & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
-			float oz = ((float)((hv >> 8) & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
-			float[<2>] w_pos = { (float)gx * SPACING + ox, (float)gz * SPACING + oz };
+		for (int gx = cell_x - range; gx <= cell_x + range; gx++) {
+			for (int gz = cell_z - range; gz <= cell_z + range; gz++) {
+				int[3] key = { (gx % GRID_DIM + GRID_DIM) % GRID_DIM,
+							   (gz % GRID_DIM + GRID_DIM) % GRID_DIM,
+							   layer };
+				ulong hv = wyhash2::hash(((char*)&key)[:int[3].sizeof]);
 
-			int arm = 2 + (int)((hv >> 16) % 3u);
+				float ox = ((float)(hv & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
+				float oz = ((float)((hv >> 8) & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
+				float[<2>] w_pos = { (float)gx * SPACING + ox, (float)gz * SPACING + oz };
 
-			char b  = (char)(90 + (hv >> 24) % 70u);
-			char rb = (char)((ulong)b * 60u / 100u);
-			Color c = {rb, rb, b, 255};
+				int arm = (layer == 0) ? 2 + (int)((hv >> 16) % 3u) : 1;
 
-			draw_star(buf, size, project({w_pos.x, 0.0f, w_pos.y}, g, size), arm, c, false);
+				char b  = (char)(90 + (hv >> 24) % 70u);
+
+				float l_abs = math::abs((float)layer);
+				float dim = 1.0f / (1.0f + l_abs * 0.25f);
+				b = (char)((float)b * dim);
+
+				char rb = (char)((ulong)b * 60u / 100u);
+				Color c = {rb, rb, b, 255};
+
+				draw_star(buf, size, project({w_pos.x, y_off, w_pos.y}, g, size), arm, c, false);
+			}
 		}
 	}
 }
@@ -960,15 +1109,15 @@ fn void draw_ship(Game* g, Color* buf, usz[<2>] size) {
 			if (!d.active) continue;
 			int[<2>] s1 = project(d.p1, g, size);
 			int[<2>] s2 = project(d.p2, g, size);
-			draw_line(buf, size, s1, s2, GREEN, false);
+			draw_line_glow(buf, size, s1, s2, GREEN, false);
 		}
 		return;
 	}
 
 	float[<3>] ship_cam_space = { 0, 0, 0 };
 
-	float[<3>][4] world_v;
-	int[<2>][4] s;
+	float[<3>][5] world_v;
+	int[<2>][5] s;
 	foreach (i, v : SHIP_VERTS) {
 		float[<3>] lv = g.ship_rot * v;
 		world_v[i] = lv + g.ship_pos;
@@ -996,7 +1145,7 @@ fn void draw_particles(Game* g, Color* buf, usz[<2>] size) {
 		}
 
 		Color c = {r, gr, bv, 255};
-		draw_pixel(buf, size, s, c, false);
+		draw_pixel_add(buf, size, s, c);
 		if (p.life > 0.8f) draw_star(buf, size, s, 1, c, false);
 	}
 }
@@ -1015,7 +1164,7 @@ fn void draw_bullets(Game* g, Color* buf, usz[<2>] size) {
 		int[<2>] s2 = project_cam_space(get_cam_space_rel(r2, g), g, size);
 		Color c = b.from_ship ? WHITE : ENEMY_COLOR;
 
-		draw_line(buf, size, s1, s2, c, false);
+		draw_line_glow(buf, size, s1, s2, c, false);
 		draw_star(buf, size, s1, arm, c, false);
 	}
 }
@@ -1027,10 +1176,10 @@ fn void draw_asteroids(Game* g, Color* buf, usz[<2>] size) {
 		float[<2>] d_xz = toroidal_offset(a.pos.xz - g.ship_pos.xz);
 		float[<3>] asteroid_rel_center = { d_xz.x, a.pos.y - g.ship_pos.y, d_xz.y };
 
-		int[<2>][8] s;
+		int[<2>][12] s;
 		Quaternionf rotation = quaternion::from_axis_angle({0, 1, 0}, a.rot);
 
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; i < 12; i++) {
 			float[<3>] local_v = rotation * a.verts[i];
 			s[i] = project_cam_space(get_cam_space_rel(asteroid_rel_center + local_v, g), g, size);
 		}
@@ -1045,7 +1194,7 @@ fn void draw_saucer(Game* g, Color* buf, usz[<2>] size) {
 	float[<3>] saucer_rel_center = { d_xz.x, g.saucer.pos.y - g.ship_pos.y, d_xz.y };
 	float rad = g.saucer.type == SaucerType.SMALL ? 0.35f : 1.2f;
 
-	int[<2>][6] s;
+	int[<2>][8] s;
 	foreach (i, v : SAUCER_VERTS) {
 		s[i] = project_cam_space(get_cam_space_rel(saucer_rel_center + (v * rad), g), g, size);
 	}
@@ -1065,9 +1214,9 @@ fn void draw_hud(Game* g, Color* buf, usz[<2>] size) {
 	for (int i = 0; i < g.lives; i++) {
 		int lx = 50 + i * 30;
 		int ly = 120;
-		draw_line(buf, size, {lx, ly}, {lx+10, ly+20}, GREEN, false);
-		draw_line(buf, size, {lx, ly}, {lx-10, ly+20}, GREEN, false);
-		draw_line(buf, size, {lx+10, ly+20}, {lx-10, ly+20}, GREEN, false);
+		draw_line_glow(buf, size, {lx, ly}, {lx+10, ly+20}, GREEN, false);
+		draw_line_glow(buf, size, {lx, ly}, {lx-10, ly+20}, GREEN, false);
+		draw_line_glow(buf, size, {lx+10, ly+20}, {lx-10, ly+20}, GREEN, false);
 	}
 
 	if (g.game_over) {
@@ -1117,9 +1266,9 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, usz
 
 	bool should_run;
 	$if env::WASM:
-		should_run = self.is_started && self.is_focused;
+		should_run = self.is_started && self.is_focused && !self.paused;
 	$else
-		should_run = self.is_started;
+		should_run = self.is_started && !self.paused;
 	$endif
 
 	if (should_run) {
@@ -1300,6 +1449,7 @@ fn int main(int argc, char** args) {
 	$endif
 
 	$if (env::WASM):
+		web_ctx.g.is_started = false;
 		web_ctx.g.load_best_score();
 		web_ctx.g.init(true);
 		web_ctx.g.scale = (float)screen_size.y / 4.0f;
@@ -1312,6 +1462,7 @@ fn int main(int argc, char** args) {
 	$else
 
 		Game g;
+		g.is_started = true;
 		g.load_best_score();
 		g.init(true);
 		g.scale = (float)screen_size.y / 4.0f;
