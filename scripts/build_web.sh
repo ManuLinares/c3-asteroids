@@ -19,13 +19,20 @@ emcc $OBJS \
     -o "$OUTPUT_DIR/index.html" \
     --shell-file lib/shell.html \
     -s ALLOW_MEMORY_GROWTH=1 \
-    -s ASYNCIFY=1 \
+    -s STACK_SIZE=4194304 \
     -s "EXPORTED_RUNTIME_METHODS=['requestFullscreen', 'HEAPU8']" \
-    -s "EXPORTED_FUNCTIONS=['_main', '_wasm_start_game']" \
+    -s "EXPORTED_FUNCTIONS=['_main', '_wasm_start_game', '_web_tick', '_malloc', '_free']" \
     -s "DEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['\$stringToNewUTF8']" \
-    -O0
+    -O2
 
 #stringToNewUTF8 comes from RGFW
+
+# for debugguing
+#    -s SAFE_HEAP=1 \
+#    -s STACK_OVERFLOW_CHECK=2 \
+#    -g3 \
+#    -s ASSERTIONS=2 \
+#    -O0
 
 #    -s INITIAL_MEMORY=33554432 \
 #    -s ERROR_ON_UNDEFINED_SYMBOLS=0 \

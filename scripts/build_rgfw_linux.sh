@@ -31,7 +31,6 @@ for csrc in xdg-shell.c xdg-toplevel-icon-v1.c xdg-decoration-unstable-v1.c \
 done
 
 # 3. Compile RGFW with BOTH backends enabled
-# Note: RGFW_X11 and RGFW_WAYLAND together enables the dynamic backend. Test this now: TODO
 cc -O3 -D RGFW_X11 -D RGFW_WAYLAND -D RGFW_IMPLEMENTATION -x c -c RGFW.h -o RGFW.o
 
 # 4. Bundle everything into a single libRGFW.a

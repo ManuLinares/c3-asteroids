@@ -79,6 +79,17 @@
 				monitorRunDependencies: function(left) {
 					this.totalDependencies = Math.max(this.totalDependencies, left);
 					Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+				},
+				onRuntimeInitialized: function() {
+					function loop() {
+						try {
+							Module._web_tick();
+							requestAnimationFrame(loop);
+						} catch(e) {
+							console.error('web_tick error:', e);
+						}
+					}
+					requestAnimationFrame(loop);
 				}
 			};
 			Module.setStatus('Downloading...');
@@ -99,10 +110,10 @@
 					Module._wasm_start_game();
 				}
 
-				// Try to resume miniaudio's WebAudio context (stored by Emscripten internally)
+				// Try to resume miniaudio's WebAudio context (stored by Emscripten internally) workaround for now, fix, TODO:
 				setTimeout(function() {
 					if (window.AudioContext || window.webkitAudioContext) {
-						// Emscripten-miniaudio stores the context; iterate all we can find, throwing "stuff" at the wall
+						// Emscripten-miniaudio stores the context; iterate potential keys to resume.
 						['_ma_context__webaudio', 'miniaudioContext'].forEach(function(k) {
 							if (window[k] && window[k].resume) window[k].resume();
 						});

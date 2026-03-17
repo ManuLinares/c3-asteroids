@@ -101,8 +101,8 @@ struct Saucer {
 	bool active;
 }
 
-const float WORLD_PLAY_SIZE = 24.0f; // Safe area where player normally stays
-const float WORLD_WRAP_MARGIN = 12.0f; // How far beyond world an object goes before wrapping
+const float WORLD_PLAY_SIZE = 24.0f;
+const float WORLD_WRAP_MARGIN = 12.0f;
 const float WORLD_SIZE = WORLD_PLAY_SIZE + WORLD_WRAP_MARGIN;
 
 const float SHIP_THRUST_ACC  = 0.006f;
@@ -234,11 +234,13 @@ fn void Game.load_best_score(&self) {
 
 fn void Game.save_best_score(&self) {
 	$if (env::WASM):
-		emscripten_run_script(string::tformat("save_score(%d)\0", self.best_score));
+		char[64] buf;
+		emscripten_run_script(string::bformat(buf[..], "save_score(%d)\0", self.best_score).ptr);
 	$else
 		if (try f = file::open("score.txt", "w")) {
 			defer (void)f.close();
-			(void)f.write(string::tformat("%d", self.best_score));
+			char[32] buf;
+			(void)f.write(string::bformat(buf[..], "%d", self.best_score));
 		}
 	$endif
 }
@@ -810,7 +812,7 @@ fn void update(Game* g) {
 	if (g.is_won) {
 		g.win_timer += 0.016f;
 
-		// Victory fireworks: trigger periodically for the first 3 seconds
+		// Victory fireworks
 		if (g.win_timer < 3.0f && g.frame % 12 == 0) {
 			ulong h_pos = wyhash2::hash(((char*)&g.frame)[:uint.sizeof]);
 			float[<3>] firework_pos = g.ship_pos;
@@ -1012,9 +1014,12 @@ fn void draw_saucer(Game* g, Color* buf, usz[<2>] size) {
 
 fn void draw_hud(Game* g, Color* buf, usz[<2>] size) {
 	draw_text(buf, size, {50, 20}, 4, "SCORE", WHITE);
-	draw_text(buf, size, {50, 50}, 8, string::tformat("%d", g.score), WHITE);
-	draw_text(buf, size, {(int)size.x/2 - 50, 25}, 3, "BEST", WHITE);
-	draw_text(buf, size, {(int)size.x/2 - 50, 50}, 5, string::tformat("%d", g.best_score), WHITE);
+	char[32] score_str;
+	draw_text(buf, size, {50, 50}, 8, string::bformat(score_str[..], "%d", g.score), WHITE);
+
+	draw_text(buf, size, {(int)size.x/2 - 50, 25}, 3, "BEST SCORE", WHITE);
+	char[32] best_str;
+	draw_text(buf, size, {(int)size.x/2 - 50, 50}, 5, string::bformat(best_str[..], "%d", g.best_score), WHITE);
 
 	for (int i = 0; i < g.lives; i++) {
 		int lx = 50 + i * 30;
@@ -1031,9 +1036,11 @@ fn void draw_hud(Game* g, Color* buf, usz[<2>] size) {
 	}
 
 	if (g.wave_notif_timer > 0.0f) {
-		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::tformat("WAVE %d", g.wave), WHITE);
+		char[32] wave_str;
+		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::bformat(wave_str[..], "WAVE %d", g.wave), WHITE);
 	} else if (g.is_won && g.win_timer > 1.0f) {
-		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::tformat("WAVE %d", g.wave + 1), WHITE);
+		char[32] wave_str;
+		draw_text(buf, size, {(int)size.x/2 - 100, (int)size.y/2 - 100}, 10, string::bformat(wave_str[..], "WAVE %d", g.wave + 1), WHITE);
 	}
 
 	if (g.cheat_mode) {
@@ -1156,7 +1163,7 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 
 	long current_time = get_time_ns();
 	double dt = (double)(current_time - ctx.last_time) / 1_000_000_000.0;
-	if (dt > 0.25) dt = 0.25;
+	if (dt > 0.5) dt = 0.5;
 	ctx.last_time = current_time;
 
 	while (rgfw::window_check_event(ctx.win, &ctx.event)) {
@@ -1181,8 +1188,6 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 	ctx.g.run_frame(dt, &ctx.accumulator, ctx.buffer, ctx.size, ctx.win, ctx.surface);
 }
 
-alias EmMainLoopFunc = fn void(void*) @callconv("cdecl");
-extern fn void emscripten_set_main_loop_arg(EmMainLoopFunc func, void* arg, int fps, int simulate_infinite_loop) @callconv("cdecl");
 extern fn void emscripten_run_script(char* s) @callconv("cdecl");
 extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
 
@@ -1190,18 +1195,12 @@ fn void wasm_start_game() @export("wasm_start_game") {
 	web_ctx.g.is_started = true;
 }
 
-//extern fn void trap() @extern("abort") @callconv("cdecl") @if(env::WASM);
-// fn void my_panic(String msg, String file, String func, uint line) @export("my_panic") @callconv("cdecl") @if(env::WASM) {
-// 	io::printn("!!! PANIC !!!");
-// 	io::printn(msg);
-// 	trap();
-// }
+fn void web_tick() @export("web_tick") @callconv("cdecl") @if(env::WASM) {
+	web_frame(&web_ctx);
+}
+
 
 fn int main(int argc, char** args) {
-	// $if (env::WASM):
-	// 	builtin::panic = &my_panic;
-	// $endif
-
 	if (audio::audio_init() != 0) {
 		io::printn("Failed to initialize audio!");
 	}
@@ -1269,7 +1268,6 @@ fn int main(int argc, char** args) {
 		web_ctx.size = screen_size;
 		web_ctx.last_time = get_time_ns();
 		web_ctx.accumulator = 0.0;
-		emscripten_set_main_loop_arg(&web_frame, &web_ctx, 60, 0);
 	$else
 
 		Game g;

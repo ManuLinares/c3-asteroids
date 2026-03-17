@@ -15,6 +15,9 @@ cd "$RGFW_DIR"
 
 echo "Compiling RGFW for WASM (Emscripten)..."
 cp RGFW.h RGFW.c
+# Patch RGFW: remove emscripten_sleep(0) from RGFW_pollEvents.
+# It causes stack issues and we don't need it because we use JS rAF.
+sed -i 's/emscripten_sleep(0);//g' RGFW.c
 emcc -O3 -c RGFW.c -D RGFW_IMPLEMENTATION -D RGFW_EXPORT -o RGFW_wasm.o
 rm RGFW.c
 

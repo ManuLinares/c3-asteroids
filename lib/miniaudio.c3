@@ -1,9 +1,5 @@
 module ma;
 
-/**
- * Miniaudio bindings for C3
- */
-
 constdef Format : int {
 	UNKNOWN = 0,
 	U8      = 1,
@@ -27,39 +23,74 @@ constdef Result : int {
 
 alias DataCallback = fn void(Device* pDevice, void* pOutput, void* pInput, uint frameCount) @callconv("cdecl");
 
-struct Device {
+struct Device @if(env::WASM) @align(16) {
+	char[3136] data;
+}
+
+struct Device @if(!env::WASM) {
 	char[3776] data;
 }
 
-struct DeviceConfigPlayback {
-	void* pDeviceID;    // 0
-	Format format;      // 8
-	uint channels;      // 12
-	void* pChannelMap;  // 16
-	int channelMixMode; // 24
-	bool calculateLFE;  // 28
-	int shareMode;      // 32
-	uint _padding;      // 36
+struct DeviceConfigPlayback @if(env::WASM) {
+	void* pDeviceID;
+	Format format;
+	uint channels;
+	void* pChannelMap;
+	int channelMixMode;
+	bool calculateLFE;
+	int shareMode;
 }
 
-struct DeviceConfig {
-	DeviceType deviceType;     // 0
-	uint sampleRate;           // 4
-	uint periodSizeInFrames;   // 8
-	uint periodSizeInMS;       // 12
-	uint periods;              // 16
-	int performanceProfile;    // 20
-	bool noPreSilenced;        // 24
-	bool noClip;               // 25
-	bool noDisableDenormals;   // 26
-	bool noFixedSized;         // 27
-	DataCallback dataCallback; // 32
-	void* notificationCallback; // 40
-	void* stopCallback;        // 48
-	void* pUserData;           // 56
-	char[48] _resampling;      // 64 (resampling starts at 64, playback at 112)
-	DeviceConfigPlayback playback; // 112
-	char[144] _padding;        // Total 296
+struct DeviceConfig @if(env::WASM) @align(16) {
+	DeviceType deviceType;
+	uint sampleRate;
+	uint periodSizeInFrames;
+	uint periodSizeInMS;
+	uint periods;
+	int performanceProfile;
+	bool noPreSilenced;
+	bool noClip;
+	bool noDisableDenormals;
+	bool noFixedSized;
+	DataCallback dataCallback;
+	void* notificationCallback;
+	void* stopCallback;
+	void* pUserData;
+	char[32] _resampling;
+	DeviceConfigPlayback playback;
+	char[116] _tail;
+}
+
+struct DeviceConfigPlayback @if(!env::WASM) {
+	void* pDeviceID;
+	Format format;
+	uint channels;
+	void* pChannelMap;
+	int channelMixMode;
+	bool calculateLFE;
+	int shareMode;
+	uint _padding;
+}
+
+struct DeviceConfig @if(!env::WASM) {
+	DeviceType deviceType;
+	uint sampleRate;
+	uint periodSizeInFrames;
+	uint periodSizeInMS;
+	uint periods;
+	int performanceProfile;
+	bool noPreSilenced;
+	bool noClip;
+	bool noDisableDenormals;
+	bool noFixedSized;
+	uint _pad0;
+	DataCallback dataCallback;
+	void* notificationCallback;
+	void* stopCallback;
+	void* pUserData;
+	char[48] _resampling;
+	DeviceConfigPlayback playback;
+	char[144] _padding;
 }
 
 extern fn DeviceConfig device_config_init(DeviceType type) @cname("ma_device_config_init");

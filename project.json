@@ -56,5 +56,5 @@
 	},
 	"cpu": "generic",
 	"opt": "O1",
-	"debug-info": "full"
+	"debug-info": "none"
 }
