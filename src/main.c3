@@ -40,7 +40,7 @@ const int[2][] SHIP_LINES     = { {0,1}, {0,2}, {1,3}, {2,3}, {1,2} };
 const int[2][] SAUCER_LINES   = { {0,1}, {2,3}, {4,5}, {0,2}, {1,3}, {0,4}, {1,5} };
 const int[2][] ASTEROID_LINES = { {0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,6}, {6,7}, {7,0} };
 
-bitstruct Input : char {
+bitstruct Input : ushort {
 	bool forward : 0;
 	bool back    : 1;
 	bool left    : 2;
@@ -48,6 +48,10 @@ bitstruct Input : char {
 	bool shoot   : 4;
 	bool hyperspace : 5;
 	bool cheat : 6;
+	bool cam_yaw_l : 7;
+	bool cam_yaw_r : 8;
+	bool cam_pitch_u : 9;
+	bool cam_pitch_d : 10;
 }
 
 struct Particle {
@@ -129,6 +133,9 @@ struct Game {
 	float[<3>] ship_vel;
 	Quaternionf ship_rot;
 	float[<3>] cam_pos;
+	float cam_yaw;
+	float cam_pitch;
+	Quaternionf cam_rot;
 	uint frame;
 	uint shoot_cooldown;
 
@@ -191,7 +198,10 @@ fn void Game.init(&self, bool full_reset) {
 	self.ship_pos   = {0, 0, 0};
 	self.ship_vel   = {0, 0, 0};
 	self.ship_rot   = quaternion::IDENTITY;
-	self.cam_pos    = self.ship_pos;
+	self.cam_pos    = { self.ship_pos.x, 20.0f, self.ship_pos.z };
+	self.cam_yaw    = 0.0f;
+	self.cam_pitch  = 1.57f;
+	self.cam_rot    = quaternion::from_euler(self.cam_pitch, self.cam_yaw, 0.0f);
 
 	self.thrust_acc = SHIP_THRUST_ACC;
 	self.rot_speed  = SHIP_ROT_SPEED;
@@ -430,6 +440,10 @@ fn void apply_key(Input* input, rgfw::Key key, bool pressed) {
 		case rgfw::Key.SPACE: input.shoot    = pressed;
 		case rgfw::Key.E:     input.hyperspace = pressed;
 		case rgfw::Key.C:     input.cheat    = pressed;
+		case rgfw::Key.K_1:   input.cam_yaw_l = pressed;
+		case rgfw::Key.K_2:   input.cam_yaw_r = pressed;
+		case rgfw::Key.K_3:   input.cam_pitch_u = pressed;
+		case rgfw::Key.K_4:   input.cam_pitch_d = pressed;
 		default:
 	}
 }
@@ -492,8 +506,23 @@ fn int[<2>] to_screen(float[<2>] rel, float scale, usz[<2>] size) {
 	return (int[<2>])(rel * scale) + (int[<2>])size / 2;
 }
 
-fn int[<2>] project(float[<2>] pos, float[<3>] cam, float scale, usz[<2>] size) {
-	return to_screen(get_relative_pos(pos, cam), scale, size);
+fn float[<3>] get_cam_space_rel(float[<3>] rel_to_ship, Game* g) {
+	// Everything is rotated relative to the ship's position
+	return g.cam_rot.conjugate() * rel_to_ship;
+}
+
+fn int[<2>] project_cam_space(float[<3>] cam_space, Game* g, usz[<2>] size) {
+	float dist = 40.0f;
+	float z = cam_space.z + dist;
+	if (z < 0.1f) z = 0.1f;
+	float fov_scale = dist / z;
+	return to_screen({ cam_space.x * fov_scale, cam_space.y * fov_scale }, g.scale, size);
+}
+
+fn int[<2>] project(float[<3>] pos, Game* g, usz[<2>] size) {
+	float[<2>] d_xz = toroidal_offset(pos.xz - g.ship_pos.xz);
+	float[<3>] rel_to_ship = { d_xz.x, pos.y - g.ship_pos.y, d_xz.y };
+	return project_cam_space(get_cam_space_rel(rel_to_ship, g), g, size);
 }
 
 fn float toroidal_dist_sq(float[<3>] p1, float[<3>] p2) {
@@ -863,8 +892,14 @@ fn void update(Game* g) {
 		}
 	}
 
-	g.cam_pos.xz += toroidal_offset(g.ship_pos.xz - g.cam_pos.xz) * g.cam_ease;
-	wrap(&g.cam_pos);
+	g.cam_pos = { g.ship_pos.x, 20.0f, g.ship_pos.z };
+
+	if (g.input.cam_yaw_l)   g.cam_yaw   += 0.05f;
+	if (g.input.cam_yaw_r)   g.cam_yaw   -= 0.05f;
+	if (g.input.cam_pitch_u) g.cam_pitch -= 0.05f;
+	if (g.input.cam_pitch_d) g.cam_pitch += 0.05f;
+
+	g.cam_rot = quaternion::from_euler(g.cam_pitch, g.cam_yaw, 0.0f);
 
 	float speed_mag = g.ship_vel.length();
 	float target_scale = 45.0f - speed_mag * 60.0f;
@@ -900,8 +935,8 @@ fn void draw_grid(Game* g, Color* buf, usz[<2>] size) {
 
 	for (int gx = cell_x - 18; gx <= cell_x + 18; gx++) {
 		for (int gz = cell_z - 18; gz <= cell_z + 18; gz++) {
-			int[2] key = { (gx % GRID_DIM + GRID_DIM) % GRID_DIM, 
-			               (gz % GRID_DIM + GRID_DIM) % GRID_DIM };
+			int[2] key = { (gx % GRID_DIM + GRID_DIM) % GRID_DIM,
+						   (gz % GRID_DIM + GRID_DIM) % GRID_DIM };
 			ulong hv = wyhash2::hash(((char*)&key)[:int[2].sizeof]);
 
 			float ox = ((float)(hv & 0xFFu) / 255.0f - 0.5f) * SPACING * 1.5f;
@@ -914,7 +949,7 @@ fn void draw_grid(Game* g, Color* buf, usz[<2>] size) {
 			char rb = (char)((ulong)b * 60u / 100u);
 			Color c = {rb, rb, b, 255};
 
-			draw_star(buf, size, project(w_pos, g.cam_pos, g.scale, size), arm, c, false);
+			draw_star(buf, size, project({w_pos.x, 0.0f, w_pos.y}, g, size), arm, c, false);
 		}
 	}
 }
@@ -923,21 +958,21 @@ fn void draw_ship(Game* g, Color* buf, usz[<2>] size) {
 	if (g.is_dead) {
 		foreach (&d : g.ship_pieces) {
 			if (!d.active) continue;
-			int[<2>] s1 = project(d.p1.xz, g.cam_pos, g.scale, size);
-			float[<2>] diff = (d.p2 - d.p1).xz;
-			int[<2>] s2 = s1 + (int[<2>])(diff * g.scale);
+			int[<2>] s1 = project(d.p1, g, size);
+			int[<2>] s2 = project(d.p2, g, size);
 			draw_line(buf, size, s1, s2, GREEN, false);
 		}
 		return;
 	}
 
-	int[<2>] s_center = project(g.ship_pos.xz, g.cam_pos, g.scale, size);
+	float[<3>] ship_cam_space = { 0, 0, 0 };
+
 	float[<3>][4] world_v;
 	int[<2>][4] s;
 	foreach (i, v : SHIP_VERTS) {
 		float[<3>] lv = g.ship_rot * v;
 		world_v[i] = lv + g.ship_pos;
-		s[i] = s_center + (int[<2>])(lv.xz * g.scale);
+		s[i] = project_cam_space(get_cam_space_rel(lv, g), g, size);
 	}
 
 	if (draw_lines(buf, size, s[..], SHIP_LINES, GREEN, true)) {
@@ -948,7 +983,7 @@ fn void draw_ship(Game* g, Color* buf, usz[<2>] size) {
 fn void draw_particles(Game* g, Color* buf, usz[<2>] size) {
 	foreach (&p : g.particles) {
 		if (p.life <= 0.0f) continue;
-		int[<2>] s = project(p.pos.xz, g.cam_pos, g.scale, size);
+		int[<2>] s = project(p.pos, g, size);
 
 		char r, gr, bv;
 		if (p.life > 0.7f) {
@@ -972,9 +1007,12 @@ fn void draw_bullets(Game* g, Color* buf, usz[<2>] size) {
 
 	foreach (&b : g.bullets) {
 		if (b.life <= 0) continue;
-		int[<2>] s1 = project(b.pos.xz, g.cam_pos, g.scale, size);
-		float[<2>] vel_off = b.vel.xz * 1.25f;
-		int[<2>] s2 = s1 - (int[<2>])(vel_off * g.scale);
+		float[<2>] d_xz = toroidal_offset(b.pos.xz - g.ship_pos.xz);
+		float[<3>] r1 = { d_xz.x, b.pos.y - g.ship_pos.y, d_xz.y };
+		float[<3>] r2 = r1 - b.vel * 1.25f;
+
+		int[<2>] s1 = project_cam_space(get_cam_space_rel(r1, g), g, size);
+		int[<2>] s2 = project_cam_space(get_cam_space_rel(r2, g), g, size);
 		Color c = b.from_ship ? WHITE : ENEMY_COLOR;
 
 		draw_line(buf, size, s1, s2, c, false);
@@ -986,13 +1024,15 @@ fn void draw_asteroids(Game* g, Color* buf, usz[<2>] size) {
 	foreach (&a : g.asteroids) {
 		if (!a.active) continue;
 
-		int[<2>] s_center = project(a.pos.xz, g.cam_pos, g.scale, size);
+		float[<2>] d_xz = toroidal_offset(a.pos.xz - g.ship_pos.xz);
+		float[<3>] asteroid_rel_center = { d_xz.x, a.pos.y - g.ship_pos.y, d_xz.y };
+
 		int[<2>][8] s;
 		Quaternionf rotation = quaternion::from_axis_angle({0, 1, 0}, a.rot);
 
 		for (int i = 0; i < 8; i++) {
 			float[<3>] local_v = rotation * a.verts[i];
-			s[i] = s_center + (int[<2>])(local_v.xz * g.scale);
+			s[i] = project_cam_space(get_cam_space_rel(asteroid_rel_center + local_v, g), g, size);
 		}
 
 		draw_lines(buf, size, s[..], ASTEROID_LINES, ASTEROID_COLOR, false);
@@ -1001,12 +1041,13 @@ fn void draw_asteroids(Game* g, Color* buf, usz[<2>] size) {
 
 fn void draw_saucer(Game* g, Color* buf, usz[<2>] size) {
 	if (!g.saucer.active) return;
-	int[<2>] s_center = project(g.saucer.pos.xz, g.cam_pos, g.scale, size);
+	float[<2>] d_xz = toroidal_offset(g.saucer.pos.xz - g.ship_pos.xz);
+	float[<3>] saucer_rel_center = { d_xz.x, g.saucer.pos.y - g.ship_pos.y, d_xz.y };
 	float rad = g.saucer.type == SaucerType.SMALL ? 0.35f : 1.2f;
 
 	int[<2>][6] s;
 	foreach (i, v : SAUCER_VERTS) {
-		s[i] = s_center + (int[<2>])(v.xz * (rad * g.scale));
+		s[i] = project_cam_space(get_cam_space_rel(saucer_rel_center + (v * rad), g), g, size);
 	}
 
 	draw_lines(buf, size, s[..], SAUCER_LINES, ENEMY_COLOR, false);
@@ -1208,8 +1249,8 @@ fn int main(int argc, char** args) {
 		defer audio::audio_terminate();
 	$endif
 
-	WindowFlags flags = ( 
-		HIDE_MOUSE | 
+	WindowFlags flags = (
+		HIDE_MOUSE |
 		FOCUS |
 		NO_BORDER);
 
