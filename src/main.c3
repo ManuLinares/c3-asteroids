@@ -1066,7 +1066,7 @@ fn void update(Game* g) {
 
 fn void draw_grid(Game* g, Color* buf, usz[<2>] size) {
 	const float SPACING = 4.0f;
-	const int GRID_DIM = (int)$$ceil((WORLD_SIZE * 2.0f) / SPACING);
+	const int GRID_DIM = (int)math::@ceil((WORLD_SIZE * 2.0f) / SPACING);
 
 	int cell_x = (int)math::floor(g.cam_pos.x / SPACING);
 	int cell_z = (int)math::floor(g.cam_pos.z / SPACING);
