@@ -1058,7 +1058,7 @@ fn void update(Game* g) {
 
 fn void draw_grid(Game* g, Color* buf, UszVec2 size) {
 	const float SPACING = 4.0f;
-	const int GRID_DIM = (int)$$ceil((WORLD_SIZE * 2.0f) / SPACING);
+	const int GRID_DIM = (int)math::@ceil((WORLD_SIZE * 2.0f) / SPACING);
 
 	int cell_x = (int)math::floor(g.cam_pos.x / SPACING);
 	int cell_z = (int)math::floor(g.cam_pos.z / SPACING);
@@ -1380,8 +1380,14 @@ fn void web_tick() @export("web_tick") @callconv("cdecl") @if(env::WASM) {
 	web_frame(&web_ctx);
 }
 
+// The linker synthesizes this to call constructors.
+extern fn void __wasm_call_ctors() @if(env::WASM);
+fn void wasm_initialize() @cname("_initialize") @wasm @if(env::WASM) => __wasm_call_ctors();
 
 fn int main(int argc, char** args) {
+	$if (env::WASM):
+		wasm_initialize();
+	$endif;
 	if (audio::audio_init() != 0) {
 		io::printn("Failed to initialize audio!");
 	}

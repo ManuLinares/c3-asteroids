@@ -35,12 +35,35 @@ struct Voice
 }
 
 Voice[MAX_VOICES] voices;
-Sfc64Random audio_random;
 
-fn float rand_f()
-{
-	return random::next_float(&audio_random);
-}
+
+/**
+Uncaught RuntimeError: indirect call to null
+    onaudioprocess http://localhost:31000/index.js:1
+    38338 http://localhost:31000/index.js:1
+    runEmAsmFunction http://localhost:31000/index.js:1
+    _emscripten_asm_const_int http://localhost:31000/index.js:1
+    callMain http://localhost:31000/index.js:1
+    doRun http://localhost:31000/index.js:1
+    run http://localhost:31000/index.js:1
+    setTimeout handler*run http://localhost:31000/index.js:1
+    removeRunDependency http://localhost:31000/index.js:1
+    receiveInstance http://localhost:31000/index.js:1
+    receiveInstantiationResult http://localhost:31000/index.js:1
+    createWasm http://localhost:31000/index.js:1
+    async* http://localhost:31000/index.js:1
+index.wasm:256210:1
+
+---
+
+-> lib/std/math/random/math.seeder.c3:87
+
+It tries to gather entropy from `clock::now()` on each call. This doesn't work in WASM.
+*/
+//fn float rand_f() => (float)rnd(); //this crashes when I fire the laser, move -> emscripten crash
+
+Sfc64Random audio_random;
+fn float rand_f() => random::next_float(&audio_random); //this works fine
 
 fn Voice* find_free_voice()
 {
@@ -165,7 +188,7 @@ fn void audio_callback(
 
 fn int audio_init()
 {
-	random::seed(&audio_random, (ulong)time::now());
+	//random::seed(&audio_random, (ulong)time::now());
 	foreach (&v : voices) v.type = VoiceType.NONE;
 
 	ma::DeviceConfig config = ma::device_config_init(ma::DeviceType.PLAYBACK);
