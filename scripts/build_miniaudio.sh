@@ -33,7 +33,7 @@ case $TARGET in
         # Use gnu target to find headers on Linux, but disable MinGW's custom stdio to match MSVC/UCRT symbols :( TODO
         clang -O3 -target x86_64-pc-windows-gnu -mno-stack-arg-probe \
               -D__USE_MINGW_ANSI_STDIO=0 -Dvsnprintf=_vsnprintf -Dsnprintf=_snprintf \
-              -x c -c "$MA_HEADER" -o "$OUT_DIR/miniaudio.obj" $MA_DEFS -DMA_NO_WEBAUDIO
+              -x c -c "$MA_HEADER" -o "$OUT_DIR/miniaudio.lib" $MA_DEFS -DMA_NO_WEBAUDIO
         ;;
     *)
         echo "Usage: $0 {linux|wasm|windows}"

@@ -18,11 +18,14 @@
 			"linked-libraries": [
 				"deps/RGFW_linux_amd64/lib/libRGFW.a",
 				"deps/miniaudio_linux_amd64/lib/libminiaudio.a",
-				"X11", "Xrandr", "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon",
-				"m", "dl", "rt", "pthread"
-			],
+				"X11", "Xrandr", "wayland-client", "wayland-cursor", "xkbcommon"
+			]
+		},
+		"linux-deps": {
+			"type": "prepare",
+			"name": "asteroids",
 			"exec": [
-				"scripts/build_rgfw_linux.sh",
+				"scripts/build_rgfw.sh linux",
 				"scripts/build_miniaudio.sh linux"
 			]
 		},
@@ -30,20 +33,33 @@
 			"type": "executable",
 			"name": "asteroids",
 			"target": "windows-x64",
-			"link-args": [ "deps/RGFW_windows_amd64/lib/RGFW.lib", "deps/miniaudio_windows_amd64/lib/miniaudio.obj" ],
-			"linked-libraries": [ "gdi32", "shell32", "user32", "winmm" ],
+			"linked-libraries": [
+				"deps/RGFW_windows_amd64/lib/RGFW.lib",
+				"deps/miniaudio_windows_amd64/lib/miniaudio.lib"
+			]
+		},
+		"windows-deps": {
+			"type": "prepare",
+			"name": "asteroids",
+			"target": "windows-x64",
 			"exec": [
+				"curl -L https://github.com/ColleagueRiley/RGFW/releases/download/1.8.1/RGFW-1.8.0_win64_msvc16.zip -o rgfw.zip",
+				"mkdir -p deps/RGFW_windows_amd64/include deps/RGFW_windows_amd64/lib",
+				"unzip -oj rgfw.zip '*/RGFW.h' -d deps/RGFW_windows_amd64/include",
+				"unzip -oj rgfw.zip '*/libRGFW.a' -d deps/RGFW_windows_amd64/lib",
+				"mv deps/RGFW_windows_amd64/lib/libRGFW.a deps/RGFW_windows_amd64/lib/RGFW.lib",
+				"rm rgfw.zip",
 				"scripts/build_miniaudio.sh windows"
 			]
 		},
 		"web": {
 			"type": "prepare",
 			"exec": [
-				"scripts/build_rgfw_wasm.sh",
+				"scripts/build_rgfw.sh wasm",
 				"scripts/build_miniaudio.sh wasm",
-				"scripts/build_web.sh" ]
+				"scripts/build_web.sh"
+			]
 		},
-
 		"list_objs": {
 			"type": "object-files"
 		},
