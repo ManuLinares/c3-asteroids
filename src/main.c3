@@ -1,3 +1,5 @@
+module asteroids;
+
 import rgfw;
 import std::io;
 import std::io::file;
@@ -398,7 +400,7 @@ fn void Game.destroy_asteroid(&self, Asteroid* a, Vec3 impact_vel, bool award_po
 
 fn void Game.spawn_wave(&self) {
 	self.wave_notif_timer = 2.0f;
-	ulong seed = (ulong)get_time_ns() ^ (ulong)self.frame;
+	ulong seed = (ulong)(long)clock::now() ^ (ulong)self.frame;
 	int count = 6 + self.wave * 2;
 	if (count > 25) count = 25;
 
@@ -821,7 +823,7 @@ fn void update(Game* g) {
 			foreach (&p : g.particles) {
 				if (p.life <= 0.0f) {
 					p.pos = g.ship_pos;
-					ulong h = rand_hash(i, g.frame + (ulong)get_time_ns());
+					ulong h = rand_hash(i, g.frame + (ulong)(long)clock::now());
 					p.vel = {((float)(h & 0xFFu) / 128.0f - 1.0f) * 0.4f, 0,
 							 ((float)((h >> 8) & 0xFFu) / 128.0f - 1.0f) * 0.4f};
 					p.life = 0.5f;
@@ -830,7 +832,7 @@ fn void update(Game* g) {
 			}
 		}
 
-		ulong hx = rand_hash(g.frame, (ulong)get_time_ns());
+		ulong hx = rand_hash(g.frame, (ulong)(long)clock::now());
 
 		if ((hx % 100u) < 10u) {
 			Vec3[5] boom_v;
@@ -1242,15 +1244,6 @@ struct WebContext {
 
 WebContext web_ctx;
 
-extern fn double emscripten_get_now() @callconv("cdecl");
-
-fn long get_time_ns() {
-	$if env::WASM:
-		return (long)(emscripten_get_now() * 1000000.0);
-	$else
-		return (long)clock::now();
-	$endif
-}
 
 fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, UszVec2 size, rgfw::Window* win, rgfw::Surface* surface) {
 	const double DT = 1.0 / 60.0;
@@ -1342,7 +1335,7 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 		ctx.surface = rgfw::window_create_surface(ctx.win, (char*)ctx.buffer, ...ctx.size, rgfw::Format.RGBA8);
 	}
 
-	long current_time = get_time_ns();
+	long current_time = (long)clock::now();
 	double dt = (double)(current_time - ctx.last_time) / 1_000_000_000.0;
 	if (dt > 0.5) dt = 0.5;
 	ctx.last_time = current_time;
@@ -1369,20 +1362,6 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 	ctx.g.run_frame(dt, &ctx.accumulator, ctx.buffer, ctx.size, ctx.win, ctx.surface);
 }
 
-extern fn void emscripten_run_script(char* s) @callconv("cdecl");
-extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
-
-fn void wasm_start_game() @export("wasm_start_game") {
-	web_ctx.g.is_started = true;
-}
-
-fn void web_tick() @export("web_tick") @callconv("cdecl") @if(env::WASM) {
-	web_frame(&web_ctx);
-}
-
-// The linker synthesizes this to call constructors.
-extern fn void __wasm_call_ctors() @if(env::WASM);
-fn void wasm_initialize() @cname("_initialize") @wasm @if(env::WASM) => __wasm_call_ctors();
 
 fn int main(int argc, char** args) {
 	$if (env::WASM):
@@ -1454,7 +1433,7 @@ fn int main(int argc, char** args) {
 		web_ctx.surface = surface;
 		web_ctx.buffer = buffer;
 		web_ctx.size = screen_size;
-		web_ctx.last_time = get_time_ns();
+		web_ctx.last_time = (long)clock::now();
 		web_ctx.accumulator = 0.0;
 	$else
 
@@ -1469,10 +1448,10 @@ fn int main(int argc, char** args) {
 		const double DT = 1.0 / 60.0;
 		const long DT_NS = (long)(DT * 1_000_000_000.0);
 		double accumulator = 0.0;
-		long last_time = get_time_ns();
+		long last_time = (long)clock::now();
 
 		while MAINLOOP: (!rgfw::window_should_close(win)) {
-			long current_time = get_time_ns();
+			long current_time = (long)clock::now();
 			double dt = (double)(current_time - last_time) / 1_000_000_000.0;
 			if (dt > 0.25) dt = 0.25;
 			last_time = current_time;
@@ -1500,7 +1479,7 @@ fn int main(int argc, char** args) {
 			g.run_frame(dt, &accumulator, buffer, screen_size, win, surface);
 
 			$if (!env::WASM):
-				long now = get_time_ns();
+				long now = (long)clock::now();
 				long work_done = now - last_time;
 				long target = g.paused ? (long)100_000_000 : DT_NS;
 				if (work_done < target) {
@@ -1513,4 +1492,36 @@ fn int main(int argc, char** args) {
 	$endif;
 
 	return 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+extern fn void emscripten_run_script(char* s) @callconv("cdecl");
+extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
+
+fn void wasm_start_game() @export("wasm_start_game") {
+	web_ctx.g.is_started = true;
+}
+
+fn void web_tick() @export("web_tick") @callconv("cdecl") @if(env::WASM) {
+	web_frame(&web_ctx);
+}
+
+// The linker synthesizes this to call constructors.
+extern fn void __wasm_call_ctors() @if(env::WASM);
+fn void wasm_initialize() @cname("_initialize") @wasm @if(env::WASM) => __wasm_call_ctors();
+
+
+////////////////////////////////////////////////////////////////////////////////
+module std::time::os @if(env::WASM && !env::WASI);
+
+extern fn double emscripten_get_now() @callconv("cdecl");
+fn Time native_timestamp()
+{
+	return (Time)(emscripten_get_now() * 1_000.0);
+}
+
+fn Clock native_clock()
+{
+	return (Clock)(emscripten_get_now() * 1_000_000.0);
 }
