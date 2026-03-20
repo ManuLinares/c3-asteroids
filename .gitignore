@@ -16,3 +16,7 @@ out/
 # OS files
 .DS_Store
 Thumbs.db
+# Dependencies
+/deps/*
+!/deps/miniaudio/
+!/deps/miniaudio/miniaudio.h

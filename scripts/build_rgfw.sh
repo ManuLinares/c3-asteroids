@@ -4,9 +4,8 @@ set -e
 TARGET=$1
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 RGFW_DIR="$DIR/RGFW"
-RGFW_TAG="1.8.1"
 
-[ -d "$RGFW_DIR" ] || git clone --depth 1 --branch "$RGFW_TAG" https://github.com/ColleagueRiley/RGFW.git "$RGFW_DIR"
+[ -d "$RGFW_DIR" ] || git clone --depth 1 https://github.com/ColleagueRiley/RGFW.git "$RGFW_DIR"
 cd "$RGFW_DIR"
 
 case $TARGET in

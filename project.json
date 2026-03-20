@@ -55,10 +55,18 @@
 		"macos": {
 			"type": "executable",
 			"name": "asteroids",
+			"target": "macos-aarch64",
 			"linked-libraries": [
 				"deps/RGFW_macos/lib/libRGFW.a",
-				"deps/miniaudio_macos/lib/libminiaudio.a",
-				"Cocoa", "IOKit", "QuartzCore", "AudioToolbox", "CoreAudio", "Foundation"
+				"deps/miniaudio_macos/lib/libminiaudio.a"
+			],
+			"link-args": [
+				"-framework", "Cocoa",
+				"-framework", "IOKit",
+				"-framework", "QuartzCore",
+				"-framework", "AudioToolbox",
+				"-framework", "CoreAudio",
+				"-framework", "Foundation"
 			]
 		},
 		"macos-deps": {
