@@ -33,7 +33,16 @@ case $TARGET in
 		emar rcs "$LIB_NAME" RGFW_wasm.o
 		rm RGFW_temp.c
 		;;
-	*) echo "Usage: $0 {linux|wasm}"; exit 1 ;;
+	macos)
+		echo "Building RGFW for macOS..."
+		DEPS_DIR="../../deps/RGFW_macos"
+		LIB_NAME="libRGFW.a"
+
+		# Compile RGFW with MacOS Cocoa backend
+		cc -O3 -fPIC -D RGFW_MACOS -D RGFW_IMPLEMENTATION -x c -c RGFW.h -o RGFW.o
+		ar rcs "$LIB_NAME" RGFW.o
+		;;
+	*) echo "Usage: $0 {linux|wasm|macos}"; exit 1 ;;
 esac
 
 mkdir -p "$DEPS_DIR/lib" "$DEPS_DIR/include"

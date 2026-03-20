@@ -52,6 +52,23 @@
 				"scripts/build_miniaudio.sh windows"
 			]
 		},
+		"macos": {
+			"type": "executable",
+			"name": "asteroids",
+			"linked-libraries": [
+				"deps/RGFW_macos/lib/libRGFW.a",
+				"deps/miniaudio_macos/lib/libminiaudio.a",
+				"Cocoa", "IOKit", "QuartzCore", "AudioToolbox", "CoreAudio", "Foundation"
+			]
+		},
+		"macos-deps": {
+			"type": "prepare",
+			"name": "asteroids",
+			"exec": [
+				"scripts/build_rgfw.sh macos",
+				"scripts/build_miniaudio.sh macos"
+			]
+		},
 		"web": {
 			"type": "prepare",
 			"exec": [

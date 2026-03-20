@@ -35,8 +35,16 @@ case $TARGET in
               -D__USE_MINGW_ANSI_STDIO=0 -Dvsnprintf=_vsnprintf -Dsnprintf=_snprintf \
               -x c -c "$MA_HEADER" -o "$OUT_DIR/miniaudio.lib" $MA_DEFS -DMA_NO_WEBAUDIO
         ;;
+    macos)
+        echo "Building miniaudio for macOS..."
+        OUT_DIR="$PROJ_ROOT/deps/miniaudio_macos/lib"
+        mkdir -p "$OUT_DIR"
+        cc -O3 -fPIC -x c -c "$MA_HEADER" -o miniaudio.o $MA_DEFS -DMA_NO_WEBAUDIO
+        ar rcs "$OUT_DIR/libminiaudio.a" miniaudio.o
+        rm miniaudio.o
+        ;;
     *)
-        echo "Usage: $0 {linux|wasm|windows}"
+        echo "Usage: $0 {linux|wasm|windows|macos}"
         exit 1
         ;;
 esac
