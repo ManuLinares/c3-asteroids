@@ -2,41 +2,57 @@
 
 Asteroids clone written in C3. Software-rendered. Window and input via [RGFW](https://github.com/ColleagueRiley/RGFW). Audio via [miniaudio](https://miniaud.io).
 
-You can play it in the browser: https://manulinares.github.io/c3-asteroids/
-
-## Demo
-
-[![Asteroids gameplay](https://img.youtube.com/vi/hHuq6c-NRUs/maxresdefault.jpg)](https://www.youtube.com/watch?v=hHuq6c-NRUs)
+<p align="center">
+  <a href="https://manulinares.github.io/c3-asteroids/">
+    <img src="preview.png" alt="Asteroids gameplay">
+    <br>
+    <b>🚀 Click here to play in the browser! 🚀</b>
+  </a>
+</p>
 
 ## Dependencies
 
 - [C3 compiler](https://c3-lang.org) (`c3c` in PATH)
-- On Linux: `gcc`, `clang`, `wayland-scanner`, `git`, and dev libraries for X11/Wayland.
-- For Windows cross-compilation: `mingw-w64`.
-- For Web: [Emscripten](https://emscripten.org/).
+- **Linux**: `gcc`, `clang`, `wayland-scanner`, `git`, and dev libraries for X11/Wayland.
+- **MacOS**: Xcode Command Line Tools
+- **Windows cross-compilation**: `mingw-w64` and MSVC SDK (via `c3c fetch-sdk windows`).
+- **Web**: [Emscripten](https://emscripten.org/).
 
 ## Build and Run
 
-The build system automatically compiles necessary C dependencies on the first run.
+Before the first build on any platform, you must prepare the C dependencies ([RGFW](https://github.com/ColleagueRiley/RGFW) and [miniaudio](https://miniaud.io)):
 
-### Linux (X11/Wayland)
+### 1. Build Dependencies
+
+Choose your target platform:
 
 ```sh
-c3c run linux --trust=full
+# For Linux
+c3c build linux-deps --trust=full
+
+# For macOS
+c3c build macos-deps --trust=full
+
+# For Windows (cross-compile from Linux)
+c3c build windows-deps --trust=full
 ```
 
-### Web (WASM)
+### 2. Build the Game
 
 ```sh
+# Linux
+c3c run linux
+
+# macOS
+c3c run macos
+
+# Windows
+c3c build windows
+
+# Web (WASM)
 c3c build web --trust=full
-# Serve the build/ directory using any local web server
-```
-
-### Windows (Cross-compilation from Linux)
-
-```sh
-c3c build windows --trust=full
-# Run the resulting asteroids.exe
+# This target handles dependencies and linking in one step.
+# Serve the build/ directory using any local web server.
 ```
 
 ## Controls
