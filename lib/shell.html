@@ -1,139 +1,56 @@
 <!DOCTYPE html>
-<html lang="en-us">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-		<title>Asteroids C3</title>
-		<meta property="og:title" content="Asteroids C3" />
-		<meta property="og:description" content="A classic Asteroids clone written in C3" />
-		<meta property="og:type" content="website" />
-		<meta property="og:url" content="https://manulinares.github.io/c3-asteroids/" />
-		<meta property="og:image" content="https://manulinares.github.io/c3-asteroids/preview.png" />
-		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content="Asteroids C3" />
-		<meta name="twitter:description" content="A classic Asteroids clone written in C3" />
-		<meta name="twitter:image" content="https://manulinares.github.io/c3-asteroids/preview.png" />
-		<style>
-			html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-			canvas.emscripten { border: none; width: 100vw !important; height: 100vh !important; display: block; image-rendering: pixelated; background: #000; object-fit: fill; }
-			#status { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #777; z-index: 10; font-family: 'Courier New', monospace; }
-			#progress { height: 4px; width: 200px; position: fixed; top: 55%; left: 50%; transform: translate(-50%, -50%); z-index: 10; appearance: none; border: none; background: #222; }
-			#progress::-webkit-progress-bar { background: #222; }
-			#progress::-webkit-progress-value { background: #fff; }
-			#click-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; cursor: pointer; transition: opacity 0.5s ease; font-family: 'Courier New', monospace; }
-			#click-overlay h1 { font-size: 4em; letter-spacing: 0.3em; color: white; margin: 0 0 0.2em 0; text-shadow: 0 0 30px rgba(255,255,255,0.4); }
-			#click-overlay p { font-size: 1.2em; color: #888; letter-spacing: 0.3em; animation: pulse 1.5s ease-in-out infinite; }
-			@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-		</style>
-	</head>
-	<body>
-		<div class="emscripten" id="status">Downloading...</div>
-		<progress value="0" max="100" id="progress" hidden=1></progress>
-		<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
-		<div id="click-overlay">
-			<h1>ASTEROIDS C3</h1>
-			<p>-- CLICK TO START --</p>
-		</div>
-		<script type='text/javascript'>
-			var statusElement = document.getElementById('status');
-			var progressElement = document.getElementById('progress');
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>Asteroids C3</title>
+	<meta property="og:title" content="Asteroids C3" />
+	<meta property="og:description" content="A classic Asteroids clone written in C3" />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content="https://manulinares.github.io/c3-asteroids/" />
+	<meta property="og:image" content="https://manulinares.github.io/c3-asteroids/preview.png" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Asteroids C3" />
+	<meta name="twitter:description" content="A classic Asteroids clone written in C3" />
+	<meta name="twitter:image" content="https://manulinares.github.io/c3-asteroids/preview.png" />
+	<style>
+		:root { --bg: #000; --text: #fff; --dim: #888; }
+		html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: 'Courier New', monospace; }
+		canvas { border: none; width: 100vw !important; height: 100vh !important; display: block; image-rendering: pixelated; object-fit: fill; outline: none; }
+		#click-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; cursor: pointer; transition: opacity 0.5s ease; }
+		#click-overlay h1 { font-size: 4em; letter-spacing: 0.3em; color: var(--text); margin: 0; text-shadow: 0 0 30px rgba(255,255,255,0.4); }
+		#click-overlay p { font-size: 1.2em; color: var(--dim); letter-spacing: 0.3em; animation: pulse 1.5s ease-in-out infinite; margin-top: 20px; }
+		@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+	</style>
+</head>
+<body>
+	<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+	
+	<div id="click-overlay" onclick="startGame()">
+		<h1>ASTEROIDS C3</h1>
+		<p>-- CLICK TO START --</p>
+	</div>
 
-			var Module = {
-				preRun: [],
-				postRun: [],
-				print: (function() {
-					var element = document.getElementById('output');
-					if (element) element.value = '';
-					return function(text) {
-						if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-						console.log(text);
-					};
-				})(),
-				canvas: (function() {
-					var canvas = document.getElementById('canvas');
-					canvas.addEventListener("webglcontextlost", function(e) { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
-					return canvas;
-				})(),
-				setStatus: function(text) {
-					if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
-					if (text === Module.setStatus.last.text) return;
-					var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
-					var now = Date.now();
-					if (m && now - Module.setStatus.last.time < 30) return;
-					Module.setStatus.last.time = now;
-					Module.setStatus.last.text = text;
-					if (m) {
-						text = m[1];
-						progressElement.value = parseInt(m[2])*100;
-						progressElement.max = parseInt(m[4])*100;
-						progressElement.hidden = false;
-					} else {
-						progressElement.value = null;
-						progressElement.max = null;
-						progressElement.hidden = true;
-					}
-					statusElement.innerHTML = text;
-					if (text === '') statusElement.style.display = 'none';
-				},
-				totalDependencies: 0,
-				monitorRunDependencies: function(left) {
-					this.totalDependencies = Math.max(this.totalDependencies, left);
-					Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
-				},
-				onRuntimeInitialized: function() {
-					function loop() {
-						try {
-							Module._web_tick();
-							requestAnimationFrame(loop);
-						} catch(e) {
-							console.error('web_tick error:', e);
-						}
-					}
-					requestAnimationFrame(loop);
-				}
-			};
-			Module.setStatus('Downloading...');
-			window.onerror = function(event) {
-				Module.setStatus('Exception thrown, see JavaScript console');
-				Module.setStatus = function(text) { if (text) console.error('[status] ' + text); };
-			};
+	<script>
+		function startGame() {
+			const overlay = document.getElementById('click-overlay');
+			overlay.style.opacity = '0';
+			
+			// Fullscreen request
+			const req = document.documentElement.requestFullscreen;
+			if (req) req.call(document.documentElement).catch(e => console.warn(e));
 
-			// Browsers block AudioContext until a user gesture. Resume on first click.
-			document.getElementById('click-overlay').addEventListener('click', function() {
-				var overlay = this;
-				overlay.style.opacity = '0';
-				var req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.msRequestFullscreen;
-				if (req) req.call(document.documentElement).catch(function(e) { console.warn('Fullscreen denied:', e); });
+			if (Module._start_web_game) Module._start_web_game();
+			setTimeout(() => overlay.remove(), 500);
+		}
 
-				// Tell C3 the game has started
-				if (typeof Module._wasm_start_game === 'function') {
-					Module._wasm_start_game();
-				}
+		var Module = {
+			canvas: document.getElementById('canvas')
+		};
 
-				// Try to resume miniaudio's WebAudio context (stored by Emscripten internally) workaround for now, fix, TODO:
-				setTimeout(function() {
-					if (window.AudioContext || window.webkitAudioContext) {
-						// Emscripten-miniaudio stores the context; iterate potential keys to resume.
-						['_ma_context__webaudio', 'miniaudioContext'].forEach(function(k) {
-							if (window[k] && window[k].resume) window[k].resume();
-						});
-						// Generic: resume any AudioContext thats suspended
-						if (typeof Module.getAudioContext === 'function') {
-							var ctx = Module.getAudioContext();
-							if (ctx && ctx.state === 'suspended') ctx.resume();
-						}
-					}
-				}, 50);
-				setTimeout(function() { overlay.remove(); }, 450);
-			});
-
-			window.save_score = function(score) {
-				localStorage.setItem('asteroids_high_score', score);
-			};
-			window.load_score = function() {
-				return parseInt(localStorage.getItem('asteroids_high_score') || '0');
-			};
-		</script>
-		{{{ SCRIPT }}}
-	</body>
+		window.save_score = score => localStorage.setItem('asteroids_high_score', score);
+		window.load_score = () => parseInt(localStorage.getItem('asteroids_high_score') || '0');
+	</script>
+	{{{ SCRIPT }}}
+</body>
 </html>

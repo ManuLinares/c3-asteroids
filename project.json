@@ -82,6 +82,7 @@
 			"exec": [
 				"scripts/build_rgfw.sh wasm",
 				"scripts/build_miniaudio.sh wasm",
+				"c3c build web_objs",
 				"scripts/build_web.sh"
 			]
 		},

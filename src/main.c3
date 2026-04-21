@@ -1268,8 +1268,8 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, Usz
 	rgfw::window_blit_surface(win, surface);
 }
 
-fn void web_frame(void* arg) @export("web_frame") {
-	WebContext* ctx = (WebContext*)arg;
+fn void web_frame() {
+	WebContext* ctx = &web_ctx;
 
 	int rw, rh;
 	rgfw::window_get_size(ctx.win, &rw, &rh);
@@ -1312,9 +1312,6 @@ fn void web_frame(void* arg) @export("web_frame") {
 
 
 fn int main(int argc, char** args) {
-	$if (env::WASM):
-		wasm_initialize();
-	$endif;
 	if (audio::audio_init() != 0) {
 		io::printn("Failed to initialize audio!");
 	}
@@ -1383,6 +1380,7 @@ fn int main(int argc, char** args) {
 		web_ctx.size = screen_size;
 		web_ctx.last_time = (long)clock::now();
 		web_ctx.accumulator = 0.0;
+		emscripten_set_main_loop(&web_frame, 0, 1);
 	$else
 
 		Game g;
@@ -1444,23 +1442,23 @@ fn int main(int argc, char** args) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// for saving high score to localStorage
 extern fn void emscripten_run_script(char* s);
 extern fn int emscripten_run_script_int(char* s);
 
-fn void wasm_start_game() @export("wasm_start_game") {
+alias Em_callback_func = fn void();
+extern fn void emscripten_set_main_loop(Em_callback_func func, int fps, int simulate_infinite_loop);
+
+fn void start_web_game() @export("start_web_game") {
 	web_ctx.g.is_started = true;
 }
 
-fn void web_tick() @export("web_tick") @if(env::WASM) => web_frame(&web_ctx);
-
-// The linker synthesizes this to call constructors.
-extern fn void __wasm_call_ctors() @if(env::WASM);
-fn void wasm_initialize() @cname("_initialize") @wasm @if(env::WASM) => __wasm_call_ctors();
-
 
 ////////////////////////////////////////////////////////////////////////////////
+// remove this when emscripten PR gets merged
 module std::time::os @if(env::WASM && !env::WASI);
 
 extern fn double emscripten_get_now() @callconv("cdecl");
 fn Time native_timestamp() => (Time)(emscripten_get_now() * 1_000.0);
 fn Clock native_clock()    => (Clock)(emscripten_get_now() * 1_000_000.0);
+ 
