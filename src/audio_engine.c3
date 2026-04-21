@@ -1,13 +1,14 @@
 module audio;
-import ma;
+import miniaudio;
 import std::math;
-import std::math::random;
 import std::io;
 import std::time;
 
-const usz MAX_VOICES = 16;
+alias ma = module miniaudio;
+
+const usz MAX_VOICES    = 16;
 const float SAMPLE_RATE = 44100.0f;
-const usz CHANNELS = 2;
+const usz CHANNELS      = 2;
 
 ma::Device device;
 
@@ -36,31 +37,25 @@ struct Voice
 
 Voice[MAX_VOICES] voices;
 
-fn float rand_f() => (float)rnd(); //clock was missing in wasm
+fn float rand_f() => (float)rnd(); // clock was missing in wasm
 
-//Sfc64Random audio_random;
-//fn float rand_f() => random::next_float(&audio_random); //this works fine
+// Sfc64Random audio_random;
+// fn float rand_f() => random::next_float(&audio_random); //this works fine
 
 fn Voice* find_free_voice()
 {
-	foreach (&v : voices) if (v.type == VoiceType.NONE) return v;
+	foreach (&v : voices) if (v.type == NONE) return v;
 	return null;
 }
 
 fn void Voice.play(&self, VoiceType type, float freq, float dur, float vol)
 {
-	*self = {
-		.type = type,
-		.phase = 0,
-		.frequency = freq,
-		.duration = dur,
-		.volume = vol
-	};
+	*self = { .type = type, .phase = 0, .frequency = freq, .duration = dur, .volume = vol };
 }
 
 fn float triangle(float phase)
 {
-	float v = (phase / (2.0f * (float)math::PI));
+	float v = (phase / (2.0f * math::PI));
 	v = v - math::floor(v);
 	if (v < 0.5f) return v * 4.0f - 1.0f;
 	return 3.0f - v * 4.0f;
@@ -68,80 +63,60 @@ fn float triangle(float phase)
 
 fn float square(float phase)
 {
-	float v = (phase / (2.0f * (float)math::PI));
+	float v = (phase / (2.0f * math::PI));
 	v = v - math::floor(v);
 	return (v < 0.5f) ? 1.0f : -1.0f;
 }
 
-alias AudioCallbackFn = fn void(
-	ma::Device*,
-	float*,
-	float*,
-	uint
-) @callconv("cdecl");
+alias AudioCallbackFn = fn void(ma::Device*, float*, float*, uint);
 
-fn void audio_callback(
-	ma::Device* pDevice,
-	float* out,
-	float* in,
-	uint frameCount
-) @callconv("cdecl")
+fn void audio_callback(ma::Device* pDevice, float* out, float* in, uint frameCount)
 {
 	for (uint i = 0; i < frameCount; i++)
 	{
 		float sample = 0.0f;
 		for (usz v = 0; v < MAX_VOICES; v++)
 		{
-			if (voices[v].type == VoiceType.NONE) continue;
+			if (voices[v].type == NONE) continue;
 			Voice* pVoice = &voices[v];
 			float t = pVoice.elapsed / pVoice.duration;
-			if (t >= 1.0f && pVoice.type != VoiceType.THRUST
-				&& pVoice.type != VoiceType.SAUCER)
+			if (t >= 1.0f && pVoice.type != THRUST && pVoice.type != SAUCER)
 			{
-				pVoice.type = VoiceType.NONE;
+				pVoice.type = NONE;
 				continue;
 			}
 			float currentSample = 0.0f;
 			switch (pVoice.type)
 			{
-				case VoiceType.LASER:
+				case LASER:
 					float freq = 200.0f + 1300.0f * math::exp(-t * 6.0f);
-					currentSample = triangle(pVoice.phase + (float)math::PI_2);
-					pVoice.phase += 2.0f * (float)math::PI * freq / SAMPLE_RATE;
+					currentSample = triangle(pVoice.phase + math::HALF_PI);
+					pVoice.phase += 2.0f * math::PI * freq / SAMPLE_RATE;
 					currentSample *= (1.0f - t);
-				case VoiceType.EXPLOSION:
+				case EXPLOSION:
 					float noise = rand_f() * 2.0f - 1.0f;
 					float alpha = pVoice.frequency;
-					pVoice.filter_state = pVoice.filter_state
-						+ alpha * (noise - pVoice.filter_state);
+					pVoice.filter_state = pVoice.filter_state + alpha * (noise - pVoice.filter_state);
 					currentSample = pVoice.filter_state * (1.0f - t);
-				case VoiceType.THUMP:
+				case THUMP:
 					currentSample = math::sin(pVoice.phase);
-					pVoice.phase += 2.0f * (float)math::PI * pVoice.frequency
-						/ SAMPLE_RATE;
+					pVoice.phase += 2.0f * math::PI * pVoice.frequency / SAMPLE_RATE;
 					currentSample *= (1.0f - t);
-				case VoiceType.SAUCER:
+				case SAUCER:
 					pVoice.val1 += 1.0f / SAMPLE_RATE;
-					float lfo_freq = (pVoice
-						.frequency > 200.0f) ? 32.0f : 16.0f;
-					float lfo = math::sin(
-						pVoice.val1 * 2.0f * (float)math::PI * lfo_freq
-					)
-						* 40.0f;
+					float lfo_freq = (pVoice.frequency > 200.0f) ? 32.0f : 16.0f;
+					float lfo = math::sin(pVoice.val1 * 2.0f * (float)(math::PI) * lfo_freq) * 40.0f;
 					float freq_s = pVoice.frequency + lfo;
-					currentSample = triangle(pVoice.phase + (float)math::PI_2);
-					pVoice.phase += 2.0f * (float)math::PI * freq_s
-						/ SAMPLE_RATE;
+					currentSample = triangle(pVoice.phase + math::HALF_PI);
+					pVoice.phase += 2.0f * math::PI * freq_s / SAMPLE_RATE;
 					currentSample *= 0.5f;
-				case VoiceType.THRUST:
+				case THRUST:
 					float tnoise = rand_f() * 2.0f - 1.0f;
-					pVoice.filter_state = pVoice.filter_state
-						+ 0.1f * (tnoise - pVoice.filter_state);
+					pVoice.filter_state = pVoice.filter_state + 0.1f * (tnoise - pVoice.filter_state);
 					currentSample = pVoice.filter_state * pVoice.volume;
-				case VoiceType.EXTRA_LIFE:
+				case EXTRA_LIFE:
 					currentSample = square(pVoice.phase);
-					pVoice.phase += 2.0f * (float)math::PI * 3000.0f
-						/ SAMPLE_RATE;
+					pVoice.phase += 2.0f * math::PI * 3000.0f / SAMPLE_RATE;
 					float bt = t * 3.0f;
 					float be = bt - math::floor(bt);
 					currentSample *= (be < 0.5f) ? 1.0f : 0.0f;
@@ -164,8 +139,8 @@ fn void audio_callback(
 
 fn int audio_init()
 {
-	//random::seed(&audio_random, (ulong)time::now());
-	foreach (&v : voices) v.type = VoiceType.NONE;
+	// random::seed(&audio_random, (ulong)time::now());
+	foreach (&v : voices) v.type = NONE;
 
 	ma::DeviceConfig config = ma::device_config_init(ma::DeviceType.PLAYBACK);
 	config.playback.format = ma::Format.F32;
@@ -219,8 +194,7 @@ fn void audio_set_saucer(bool active, bool big)
 	static usz saucerVoiceIdx = (usz)-1;
 	if (active)
 	{
-		if (saucerVoiceIdx == (usz)-1
-			|| voices[saucerVoiceIdx].type != VoiceType.SAUCER)
+		if (saucerVoiceIdx == (usz)-1 || voices[saucerVoiceIdx].type != SAUCER)
 		{
 			if (Voice* v = find_free_voice())
 			{
@@ -233,7 +207,7 @@ fn void audio_set_saucer(bool active, bool big)
 	{
 		if (saucerVoiceIdx != (usz)-1)
 		{
-			voices[saucerVoiceIdx].type = VoiceType.NONE;
+			voices[saucerVoiceIdx].type = NONE;
 			saucerVoiceIdx = (usz)-1;
 		}
 	}
@@ -244,8 +218,7 @@ fn void audio_set_thrust(bool active)
 	static usz thrustVoiceIdx = (usz)-1;
 	if (active)
 	{
-		if (thrustVoiceIdx == (usz)-1
-			|| voices[thrustVoiceIdx].type != VoiceType.THRUST)
+		if (thrustVoiceIdx == (usz)-1 || voices[thrustVoiceIdx].type != THRUST)
 		{
 			if (Voice* v = find_free_voice())
 			{
@@ -258,7 +231,7 @@ fn void audio_set_thrust(bool active)
 	{
 		if (thrustVoiceIdx != (usz)-1)
 		{
-			voices[thrustVoiceIdx].type = VoiceType.NONE;
+			voices[thrustVoiceIdx].type = NONE;
 			thrustVoiceIdx = (usz)-1;
 		}
 	}

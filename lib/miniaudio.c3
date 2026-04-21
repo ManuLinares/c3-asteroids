@@ -1,4 +1,4 @@
-module ma;
+module miniaudio;
 
 constdef Format : int {
 	UNKNOWN = 0,

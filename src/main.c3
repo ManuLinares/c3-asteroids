@@ -1,18 +1,8 @@
 module asteroids;
 
+import std;
 import rgfw;
-import std::io;
-import std::io::file;
-import std::core::mem;
 import audio;
-import std::math;
-import std::math::quaternion;
-import std::math::vector;
-import std::hash::wyhash2;
-import std::time;
-import std::time::clock;
-import std::thread;
-import std::os;
 
 typedef Color = char[<4>];
 alias IVec2 = int[<2>];
@@ -309,8 +299,6 @@ fn void Game.trigger_death(&self, Vec3[5] world_v) {
 	}
 }
 
-
-
 fn void Game.reschedule_saucer(&self) {
 	float factor = math::min(1f, (float)self.score / 60000f);
 	uint base_wait = (uint)(600f * (1f - factor * 0.75f));
@@ -466,8 +454,8 @@ fn void apply_key(Input* input, rgfw::Key key, bool pressed) {
 	}
 }
 
-macro ulong rand_hash(x, ulong seed = 0) {
-	return wyhash2::hash(((char*)&x)[:$sizeof($typeof(x))], seed);
+macro ulong rand_hash(x, seed = 0) {
+	return wyhash2::hash(((char*)&x)[:@sizeof(x)], (ulong)seed);
 }
 
 fn bool draw_pixel(Color* buf, UszVec2 size, IVec2 pos, Color c, bool check_collision) {
@@ -617,17 +605,9 @@ fn Vec2 toroidal_offset(Vec2 val) {
 	return val - math::round(val / W) * W;
 }
 
-fn Vec2 get_relative_pos(Vec2 pos, Vec3 cam) {
-	return toroidal_offset(pos - cam.xz);
-}
-
-fn IVec2 to_screen(Vec2 rel, float scale, UszVec2 size) {
-	return (IVec2)(rel * scale) + (IVec2)size / 2;
-}
-
-fn Vec3 get_cam_space_rel(Vec3 rel_to_ship, Game* g) {
-	return g.cam_rot.conjugate() * rel_to_ship;
-}
+fn Vec2 get_relative_pos(Vec2 pos, Vec3 cam) => toroidal_offset(pos - cam.xz);
+fn IVec2 to_screen(Vec2 rel, float scale, UszVec2 size) => (IVec2)(rel * scale) + (IVec2)size / 2;
+fn Vec3 get_cam_space_rel(Vec3 rel_to_ship, Game* g) => g.cam_rot.conjugate() * rel_to_ship;
 
 fn IVec2 project_cam_space(Vec3 cam_space, Game* g, UszVec2 size) {
 	float dist = g.cam_focal_dist;
@@ -649,84 +629,52 @@ fn float toroidal_dist_sq(Vec3 p1, Vec3 p2) {
 
 
 struct FontLine { float x1, y1, x2, y2; }
-
-const FontLine[] F_0 = { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,4,0,0} };
-const FontLine[] F_1 = { {1,0,1,4} };
-const FontLine[] F_2 = { {0,0,2,0}, {2,0,2,2}, {2,2,0,2}, {0,2,0,4}, {0,4,2,4} };
-const FontLine[] F_3 = { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,2,2,2} };
-const FontLine[] F_4 = { {0,0,0,2}, {0,2,2,2}, {2,0,2,4} };
-const FontLine[] F_5 = { {2,0,0,0}, {0,0,0,2}, {0,2,2,2}, {2,2,2,4}, {2,4,0,4} };
-const FontLine[] F_6 = { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,2}, {2,2,0,2} };
-const FontLine[] F_7 = { {0,0,2,0}, {2,0,2,4} };
-const FontLine[] F_8 = { {0,0,2,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,0}, {0,2,2,2} };
-const FontLine[] F_9 = { {2,2,0,2}, {0,2,0,0}, {0,0,2,0}, {2,0,2,4} };
-const FontLine[] F_G = { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,2}, {1,2,2,2} };
-const FontLine[] F_A = { {0,4,1,0}, {1,0,2,4}, {0.5,2,1.5,2} };
-const FontLine[] F_M = { {0,4,0,0}, {0,0,1,1}, {1,1,2,0}, {2,0,2,4} };
-const FontLine[] F_E = { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {0,2,1.6,2} };
-const FontLine[] F_O = { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,4,0,0} };
-const FontLine[] F_V = { {0,0,1,4}, {1,4,2,0} };
-const FontLine[] F_R = { {0,4,0,0}, {0,0,2,0}, {2,0,2,2}, {2,2,0,2}, {1,2,2,4} };
-const FontLine[] F_W = { {0,0,0,4}, {0,4,1,3}, {1,3,2,4}, {2,4,2,0} };
-const FontLine[] F_S = { {2,0,0,0}, {0,0,0,2}, {0,2,2,2}, {2,2,2,4}, {0,4,2,4} };
-const FontLine[] F_C = { {2,0,0,0}, {0,0,0,4}, {0,4,2,4} };
-const FontLine[] F_H = { {0,0,0,4}, {2,0,2,4}, {0,2,2,2} };
-const FontLine[] F_L = { {0,0,0,4}, {0,4,2,4} };
-const FontLine[] F_I = { {1,0,1,4}, {0,0,2,0}, {0,4,2,4} };
-const FontLine[] F_B = { {0,0,0,4}, {0,0,2,0}, {2,0,2,2}, {0,2,2,2}, {2,2,2,4}, {0,4,2,4} };
-const FontLine[] F_T = { {0,0,2,0}, {1,0,1,4} };
-const FontLine[] F_P = { {0,4,0,0}, {0,0,2,0}, {2,0,2,2}, {2,2,0,2} };
-const FontLine[] F_U = { {0,0,0,4}, {0,4,2,4}, {2,4,2,0} };
-const FontLine[] F_D = { {0,0,0,4}, {0,0,1.5,0}, {1.5,0,2,0.5}, {2,0.5,2,3.5}, {2,3.5,1.5,4}, {1.5,4,0,4} };
-const FontLine[] F_N = { {0,4,0,0}, {0,0,2,4}, {2,4,2,0} };
-const FontLine[] F_F = { {0,0,0,4}, {0,0,2,0}, {0,2,1.5,2} };
-const FontLine[] F_K = { {0,0,0,4}, {2,0,0,2}, {0,2,2,4} };
-const FontLine[] F_SPACE = { };
-
-const FontLine[][32] FONT_DATA = {
-	F_0, F_1, F_2, F_3, F_4, F_5, F_6, F_7, F_8, F_9,
-	F_G, F_A, F_M, F_E, F_O, F_V, F_R, F_W, F_S, F_C,
-	F_H, F_L, F_I, F_B, F_T, F_P, F_U, F_D, F_N, F_F,
-	F_K, F_SPACE
-};
-
+ 
+enum FontChar : int (char c, FontLine[] lines)
+{
+	ZERO  { '0', { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,4,0,0} } },
+	ONE   { '1', { {1,0,1,4} } },
+	TWO   { '2', { {0,0,2,0}, {2,0,2,2}, {2,2,0,2}, {0,2,0,4}, {0,4,2,4} } },
+	THREE { '3', { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,2,2,2} } },
+	FOUR  { '4', { {0,0,0,2}, {0,2,2,2}, {2,0,2,4} } },
+	FIVE  { '5', { {2,0,0,0}, {0,0,0,2}, {0,2,2,2}, {2,2,2,4}, {2,4,0,4} } },
+	SIX   { '6', { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,2}, {2,2,0,2} } },
+	SEVEN { '7', { {0,0,2,0}, {2,0,2,4} } },
+	EIGHT { '8', { {0,0,2,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,0}, {0,2,2,2} } },
+	NINE  { '9', { {2,2,0,2}, {0,2,0,0}, {0,0,2,0}, {2,0,2,4} } },
+	A     { 'A', { {0,4,1,0}, {1,0,2,4}, {0.5,2,1.5,2} } },
+	B     { 'B', { {0,0,0,4}, {0,0,2,0}, {2,0,2,2}, {0,2,2,2}, {2,2,2,4}, {0,4,2,4} } },
+	C     { 'C', { {2,0,0,0}, {0,0,0,4}, {0,4,2,4} } },
+	D     { 'D', { {0,0,0,4}, {0,0,1.5,0}, {1.5,0,2,0.5}, {2,0.5,2,3.5}, {2,3.5,1.5,4}, {1.5,4,0,4} } },
+	E     { 'E', { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {0,2,1.6,2} } },
+	F     { 'F', { {0,0,0,4}, {0,0,2,0}, {0,2,1.5,2} } },
+	G     { 'G', { {2,0,0,0}, {0,0,0,4}, {0,4,2,4}, {2,4,2,2}, {1,2,2,2} } },
+	H     { 'H', { {0,0,0,4}, {2,0,2,4}, {0,2,2,2} } },
+	I     { 'I', { {1,0,1,4}, {0,0,2,0}, {0,4,2,4} } },
+	K     { 'K', { {0,0,0,4}, {2,0,0,2}, {0,2,2,4} } },
+	L     { 'L', { {0,0,0,4}, {0,4,2,4} } },
+	M     { 'M', { {0,4,0,0}, {0,0,1,1}, {1,1,2,0}, {2,0,2,4} } },
+	N     { 'N', { {0,4,0,0}, {0,0,2,4}, {2,4,2,0} } },
+	O     { 'O', { {0,0,2,0}, {2,0,2,4}, {2,4,0,4}, {0,4,0,0} } },
+	P     { 'P', { {0,4,0,0}, {0,0,2,0}, {2,0,2,2}, {2,2,0,2} } },
+	R     { 'R', { {0,4,0,0}, {0,0,2,0}, {2,0,2,2}, {2,2,0,2}, {1,2,2,4} } },
+	S     { 'S', { {2,0,0,0}, {0,0,0,2}, {0,2,2,2}, {2,2,2,4}, {0,4,2,4} } },
+	T     { 'T', { {0,0,2,0}, {1,0,1,4} } },
+	U     { 'U', { {0,0,0,4}, {0,4,2,4}, {2,4,2,0} } },
+	V     { 'V', { {0,0,1,4}, {1,4,2,0} } },
+	W     { 'W', { {0,0,0,4}, {0,4,1,3}, {1,3,2,4}, {2,4,2,0} } },
+	SPACE { ' ', { } }
+}
+ 
 fn void draw_text(Color* buf, UszVec2 size, IVec2 pos, int text_size, char* str, Color c) {
 	int cur_x = pos.x;
 	for (usz i = 0; str[i] != '\0'; i++) {
-		int idx = -1;
-		switch (str[i]) {
-			case '0'..'9': idx = (int)(str[i] - '0');
-			case 'G': idx = 10;
-			case 'A': idx = 11;
-			case 'M': idx = 12;
-			case 'E': idx = 13;
-			case 'O': idx = 14;
-			case 'V': idx = 15;
-			case 'R': idx = 16;
-			case 'W': idx = 17;
-			case 'S': idx = 18;
-			case 'C': idx = 19;
-			case 'H': idx = 20;
-			case 'L': idx = 21;
-			case 'I': idx = 22;
-			case 'B': idx = 23;
-			case 'T': idx = 24;
-			case 'P': idx = 25;
-			case 'U': idx = 26;
-			case 'D': idx = 27;
-			case 'N': idx = 28;
-			case 'F': idx = 29;
-			case 'K': idx = 30;
-			default: break;
-		}
-
-		if (idx != -1) {
-			for (usz l = 0; l < FONT_DATA[idx].len; l++) {
-				FontLine line = FONT_DATA[idx][l];
-				IVec2 p1 = { cur_x + (int)(line.x1 * (float)text_size), pos.y + (int)(line.y1 * (float)text_size) };
-				IVec2 p2 = { cur_x + (int)(line.x2 * (float)text_size), pos.y + (int)(line.y2 * (float)text_size) };
-				draw_line_glow(buf, size, p1, p2, c, false);
-			}
+		FontChar glyph = FontChar::lookup_field(c, str[i]) ?? FontChar.SPACE;
+		for (usz l = 0; l < glyph.lines.len; l++) {
+			FontLine line = glyph.lines[l];
+			IVec2 p1 = { cur_x + (int)(line.x1 * (float)text_size), pos.y + (int)(line.y1 * (float)text_size) };
+			IVec2 p2 = { cur_x + (int)(line.x2 * (float)text_size), pos.y + (int)(line.y2 * (float)text_size) };
+			draw_line_glow(buf, size, p1, p2, c, false);
 		}
 		cur_x += text_size * 4;
 	}
@@ -1320,7 +1268,7 @@ fn void Game.run_frame(&self, double dt, double* accumulator, Color* buffer, Usz
 	rgfw::window_blit_surface(win, surface);
 }
 
-fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
+fn void web_frame(void* arg) @export("web_frame") {
 	WebContext* ctx = (WebContext*)arg;
 
 	int rw, rh;
@@ -1330,7 +1278,7 @@ fn void web_frame(void* arg) @export("web_frame") @callconv("cdecl") {
 		ctx.size.y = (usz)rh;
 		ctx.g.scale = (float)ctx.size.y / 4.0f;
 		mem::free(ctx.buffer);
-		ctx.buffer = (Color*)mem::malloc(ctx.size.x * ctx.size.y * Color.sizeof);
+		ctx.buffer = (Color*)mem::malloc(ctx.size.x * ctx.size.y * Color::size);
 		rgfw::surface_free(ctx.surface);
 		ctx.surface = rgfw::window_create_surface(ctx.win, (char*)ctx.buffer, ...ctx.size, rgfw::Format.RGBA8);
 	}
@@ -1403,7 +1351,7 @@ fn int main(int argc, char** args) {
 		screen_size.y = (usz)rh;
 	}
 
-	Color* buffer = mem::malloc(screen_size.x * screen_size.y * Color.sizeof);
+	Color* buffer = mem::malloc(screen_size.x * screen_size.y * Color::size);
 	if (!buffer) { io::printn("Failed to allocate buffer"); return 1; }
 	$if (!env::WASM):
 		defer mem::free(buffer);
@@ -1496,16 +1444,14 @@ fn int main(int argc, char** args) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-extern fn void emscripten_run_script(char* s) @callconv("cdecl");
-extern fn int emscripten_run_script_int(char* s) @callconv("cdecl");
+extern fn void emscripten_run_script(char* s);
+extern fn int emscripten_run_script_int(char* s);
 
 fn void wasm_start_game() @export("wasm_start_game") {
 	web_ctx.g.is_started = true;
 }
 
-fn void web_tick() @export("web_tick") @callconv("cdecl") @if(env::WASM) {
-	web_frame(&web_ctx);
-}
+fn void web_tick() @export("web_tick") @if(env::WASM) => web_frame(&web_ctx);
 
 // The linker synthesizes this to call constructors.
 extern fn void __wasm_call_ctors() @if(env::WASM);
@@ -1516,12 +1462,5 @@ fn void wasm_initialize() @cname("_initialize") @wasm @if(env::WASM) => __wasm_c
 module std::time::os @if(env::WASM && !env::WASI);
 
 extern fn double emscripten_get_now() @callconv("cdecl");
-fn Time native_timestamp()
-{
-	return (Time)(emscripten_get_now() * 1_000.0);
-}
-
-fn Clock native_clock()
-{
-	return (Clock)(emscripten_get_now() * 1_000_000.0);
-}
+fn Time native_timestamp() => (Time)(emscripten_get_now() * 1_000.0);
+fn Clock native_clock()    => (Clock)(emscripten_get_now() * 1_000_000.0);
