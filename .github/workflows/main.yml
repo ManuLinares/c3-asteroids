@@ -41,7 +41,7 @@ jobs:
       - name: Install C3 Compiler
         run: |
           curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-linux.tar.gz | tar xz
-          patch -p1 -d c3 < .github/stdlib.patch
+          # patch -p1 -d c3 < .github/stdlib.patch
           echo "$(pwd)/c3" >> $GITHUB_PATH
 
       - name: Setup Emscripten
@@ -136,7 +136,7 @@ jobs:
         run: |
           curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-macos.zip -o c3-macos.zip
           unzip c3-macos.zip
-          patch -p1 -d c3 < .github/stdlib.patch
+          # patch -p1 -d c3 < .github/stdlib.patch
           echo "$(pwd)/c3" >> $GITHUB_PATH
 
       - name: Build macOS Target
