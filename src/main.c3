@@ -292,7 +292,7 @@ fn void Game.trigger_death(&self, Vec3[5] world_v) {
 				ulong h2 = rand_hash(i, self.frame);
 				p.vel = {((float)(h2 & 0xFFu) / 128.0f - 1.0f) * 0.3f, 0,
 						 ((float)((h2 >> 8) & 0xFFu) / 128.0f - 1.0f) * 0.3f};
-				p.life = 1.0f + (float)(h2 % 50u) * 0.01f;
+				p.life = 1.0f + (h2 % 50u) * 0.01f;
 				break;
 			}
 		}
@@ -300,7 +300,7 @@ fn void Game.trigger_death(&self, Vec3[5] world_v) {
 }
 
 fn void Game.reschedule_saucer(&self) {
-	float factor = math::min(1f, (float)self.score / 60000f);
+	float factor = math::min(1f, self.score / 60000f);
 	uint base_wait = (uint)(600f * (1f - factor * 0.75f));
 	uint rand_range = (uint)(600f * (1f - factor * 0.75f));
 	if (base_wait < 120u) base_wait = 120u;
@@ -392,12 +392,12 @@ fn void Game.spawn_wave(&self) {
 	int count = 6 + self.wave * 2;
 	if (count > 25) count = 25;
 
-	for (usz i = 0; i < (usz)count; i++) {
+	for (usz i = 0; i < count; i++) {
 		Asteroid* a = &self.asteroids[i];
 		ulong h = rand_hash(i, seed);
 
 		float angle = ((float)(h % 360u)).to_radians();
-		float dist = 6.0f + (float)((h >> 8) % 100u) * 0.1f;
+		float dist = 6.0f + ((h >> 8) % 100u) * 0.1f;
 		Vec3 pos = {};
 		pos.xz = (Vec2){math::cos(angle), math::sin(angle)} * dist;
 
@@ -405,7 +405,7 @@ fn void Game.spawn_wave(&self) {
 		Vec2 rand_vec = {(float)((h >> 20) & 0xFFu), (float)((h >> 24) & 0xFFu)};
 		vel.xz = (rand_vec / 255.0f - 0.5f) * (0.03f + self.wave * 0.005f);
 		vel.y = 0.0f;
-		a.spawn(pos, vel, AsteroidSize.LARGE, (uint)h);
+		a.spawn(pos, vel, LARGE, (uint)h);
 	}
 }
 
@@ -417,39 +417,39 @@ fn void Asteroid.spawn(&self, Vec3 pos, Vec3 vel, AsteroidSize size, uint seed) 
 
 	self.radius = size.radius;
 	self.rot = 0;
-	self.rot_vel = ((float)(seed % 100u) / 100.0f - 0.5f) * 0.1f;
+	self.rot_vel = ((seed % 100u) / 100.0f - 0.5f) * 0.1f;
 
 	for (int j = 0; j < 6; j++) {
-		float va = (float)j * math::PI * 2.0f / 6.0f;
+		float va = j * (float)math::PI * 2.0f / 6.0f;
 		ulong vh = rand_hash(j, seed);
 
-		float vr = self.radius * (0.8f + (float)(vh % 40u) * 0.01f);
+		float vr = self.radius * (0.8f + (vh % 40u) * 0.01f);
 
 		self.verts[j] = { math::cos(va) * vr, -self.radius * 0.6f, math::sin(va) * vr };
 
 		ulong vh2 = rand_hash(j, seed ^ 0x12345678UL);
-		float vr2 = self.radius * (0.8f + (float)(vh2 % 40u) * 0.01f);
+		float vr2 = self.radius * (0.8f + (vh2 % 40u) * 0.01f);
 		self.verts[j+6] = { math::cos(va) * vr2, self.radius * 0.6f, math::sin(va) * vr2 };
 	}
 }
 
 fn void apply_key(Input* input, rgfw::Key key, bool pressed) {
 	switch (key) {
-		case rgfw::Key.W:
-		case rgfw::Key.UP:    input.forward  = pressed;
-		case rgfw::Key.S:
-		case rgfw::Key.DOWN:  input.back     = pressed;
-		case rgfw::Key.A:
-		case rgfw::Key.LEFT:  input.left     = pressed;
-		case rgfw::Key.D:
-		case rgfw::Key.RIGHT: input.right    = pressed;
-		case rgfw::Key.SPACE: input.shoot    = pressed;
-		case rgfw::Key.E:     input.hyperspace = pressed;
-		case rgfw::Key.C:     input.cheat    = pressed;
-		case rgfw::Key.K_1:   input.cam_yaw_l = pressed;
-		case rgfw::Key.K_2:   input.cam_yaw_r = pressed;
-		case rgfw::Key.K_3:   input.cam_pitch_u = pressed;
-		case rgfw::Key.K_4:   input.cam_pitch_d = pressed;
+		case W:
+		case UP:    input.forward  = pressed;
+		case S:
+		case DOWN:  input.back     = pressed;
+		case A:
+		case LEFT:  input.left     = pressed;
+		case D:
+		case RIGHT: input.right    = pressed;
+		case SPACE: input.shoot    = pressed;
+		case E:     input.hyperspace = pressed;
+		case C:     input.cheat    = pressed;
+		case K_1:   input.cam_yaw_l = pressed;
+		case K_2:   input.cam_yaw_r = pressed;
+		case K_3:   input.cam_pitch_u = pressed;
+		case K_4:   input.cam_pitch_d = pressed;
 		default:
 	}
 }
@@ -459,7 +459,7 @@ macro ulong rand_hash(x, seed = 0) {
 }
 
 fn bool draw_pixel(Color* buf, UszVec2 size, IVec2 pos, Color c, bool check_collision) {
-	if (pos.x >= 0 && pos.y >= 0 && pos.x < (int)size.x && pos.y < (int)size.y) {
+	if (pos.x >= 0 && pos.y >= 0 && pos.x < size.x && pos.y < size.y) {
 		usz idx = (usz)pos.y * size.x + (usz)pos.x;
 		if (check_collision) {
 			if (buf[idx].xyz == ASTEROID_COLOR.xyz) return true;
@@ -471,11 +471,11 @@ fn bool draw_pixel(Color* buf, UszVec2 size, IVec2 pos, Color c, bool check_coll
 }
 
 fn void draw_pixel_add(Color* buf, UszVec2 size, IVec2 pos, Color c) {
-	if (pos.x >= 0 && pos.y >= 0 && pos.x < (int)size.x && pos.y < (int)size.y) {
+	if (pos.x >= 0 && pos.y >= 0 && pos.x < size.x && pos.y < size.y) {
 		usz idx = (usz)pos.y * size.x + (usz)pos.x;
-		uint r = ((uint)buf[idx].x & 0xFFu) + ((uint)c.x & 0xFFu);
-		uint g = ((uint)buf[idx].y & 0xFFu) + ((uint)c.y & 0xFFu);
-		uint b = ((uint)buf[idx].z & 0xFFu) + ((uint)c.z & 0xFFu);
+		uint r = (buf[idx].x & 0xFFu) + (c.x & 0xFFu);
+		uint g = (buf[idx].y & 0xFFu) + (c.y & 0xFFu);
+		uint b = (buf[idx].z & 0xFFu) + (c.z & 0xFFu);
 		buf[idx].x = (char)(r > 255 ? 255 : r);
 		buf[idx].y = (char)(g > 255 ? 255 : g);
 		buf[idx].z = (char)(b > 255 ? 255 : b);
@@ -502,7 +502,7 @@ fn bool draw_line_hit_test(Color* buf, UszVec2 size, IVec2 p0, IVec2 p1) {
 	IVec2 s = { p0.x < p1.x ? 1 : -1, p0.y < p1.y ? 1 : -1 };
 	int err = d.x - d.y;
 	while (true) {
-		if (p0.x >= 0 && p0.y >= 0 && p0.x < (int)size.x && p0.y < (int)size.y) {
+		if (p0.x >= 0 && p0.y >= 0 && p0.x < size.x && p0.y < size.y) {
 			usz idx = (usz)p0.y * size.x + (usz)p0.x;
 
 			if (buf[idx].xyz == ASTEROID_COLOR.xyz) return true;
@@ -537,9 +537,9 @@ fn bool draw_line_glow(Color* buf, UszVec2 size, IVec2 p0, IVec2 p1, Color color
 		hit = draw_line_hit_test(buf, size, p0, p1);
 	}
 
-	uint cr = (uint)color.x & 0xFFu;
-	uint cg = (uint)color.y & 0xFFu;
-	uint cb = (uint)color.z & 0xFFu;
+	uint cr = color.x & 0xFFu;
+	uint cg = color.y & 0xFFu;
+	uint cb = color.z & 0xFFu;
 
 	Color g1 = { (char)((float)cr * NEON_GLOW_INTENSITY_1),
 				 (char)((float)cg * NEON_GLOW_INTENSITY_1),
@@ -669,11 +669,11 @@ enum FontChar : int (char c, FontLine[] lines)
 fn void draw_text(Color* buf, UszVec2 size, IVec2 pos, int text_size, char* str, Color c) {
 	int cur_x = pos.x;
 	for (usz i = 0; str[i] != '\0'; i++) {
-		FontChar glyph = FontChar::lookup_field(c, str[i]) ?? FontChar.SPACE;
+		FontChar glyph = FontChar::lookup_field(c, str[i]) ?? SPACE;
 		for (usz l = 0; l < glyph.lines.len; l++) {
 			FontLine line = glyph.lines[l];
-			IVec2 p1 = { cur_x + (int)(line.x1 * (float)text_size), pos.y + (int)(line.y1 * (float)text_size) };
-			IVec2 p2 = { cur_x + (int)(line.x2 * (float)text_size), pos.y + (int)(line.y2 * (float)text_size) };
+			IVec2 p1 = { cur_x + (int)(line.x1 * text_size), pos.y + (int)(line.y1 * text_size) };
+			IVec2 p2 = { cur_x + (int)(line.x2 * text_size), pos.y + (int)(line.y2 * text_size) };
 			draw_line_glow(buf, size, p1, p2, c, false);
 		}
 		cur_x += text_size * 4;
@@ -836,9 +836,9 @@ fn void update(Game* g) {
 				if (b.life <= 0) {
 					b.pos = g.saucer.pos;
 					Vec3 target_dir;
-					if (g.saucer.type == SaucerType.SMALL) {
+					if (g.saucer.type == SMALL) {
 						target_dir = (g.ship_pos - g.saucer.pos).normalize();
-						float inaccuracy = math::max(0.0f, 0.4f - (float)g.score / 100000.0f);
+						float inaccuracy = math::max(0.0f, 0.4f - g.score / 100000.0f);
 						ulong rh = rand_hash(g.frame);
 						Vec2 rand_off = {(float)(rh & 0xFFu), (float)((rh >> 8) & 0xFFu)};
 						target_dir.xz += (rand_off / 255.0f - 0.5f) * inaccuracy;
@@ -1273,14 +1273,14 @@ fn void web_frame(void* arg) @export("web_frame") {
 
 	int rw, rh;
 	rgfw::window_get_size(ctx.win, &rw, &rh);
-	if (rw > 0 && rh > 0 && ((usz)rw != ctx.size.x || (usz)rh != ctx.size.y)) {
+	if (rw > 0 && rh > 0 && (rw != ctx.size.x || rh != ctx.size.y)) {
 		ctx.size.x = (usz)rw;
 		ctx.size.y = (usz)rh;
-		ctx.g.scale = (float)ctx.size.y / 4.0f;
+		ctx.g.scale = ctx.size.y / 4.0f;
 		mem::free(ctx.buffer);
 		ctx.buffer = (Color*)mem::malloc(ctx.size.x * ctx.size.y * Color::size);
 		rgfw::surface_free(ctx.surface);
-		ctx.surface = rgfw::window_create_surface(ctx.win, (char*)ctx.buffer, ...ctx.size, rgfw::Format.RGBA8);
+		ctx.surface = rgfw::window_create_surface(ctx.win, (char*)ctx.buffer, ...ctx.size, RGBA8);
 	}
 
 	long current_time = (long)clock::now();
@@ -1290,18 +1290,18 @@ fn void web_frame(void* arg) @export("web_frame") {
 
 	while (rgfw::window_check_event(ctx.win, &ctx.event)) {
 		switch (ctx.event.type) {
-			case rgfw::EventType.QUIT: return;
-			case rgfw::EventType.FOCUS_IN: ctx.g.is_focused = true;
-			case rgfw::EventType.FOCUS_OUT: ctx.g.is_focused = false;
-			case rgfw::EventType.MOUSE_BUTTON_PRESSED:
+			case QUIT: return;
+			case FOCUS_IN: ctx.g.is_focused = true;
+			case FOCUS_OUT: ctx.g.is_focused = false;
+			case MOUSE_BUTTON_PRESSED:
 				if (!ctx.g.is_started) ctx.g.is_started = true;
 				ctx.g.is_focused = true;
-			case rgfw::EventType.KEY_PRESSED:
+			case KEY_PRESSED:
 				if (!ctx.g.is_started) ctx.g.is_started = true;
 				ctx.g.is_focused = true;
-				if (ctx.event.key.value == rgfw::Key.P) ctx.g.paused = !ctx.g.paused;
+				if (ctx.event.key.value == P) ctx.g.paused = !ctx.g.paused;
 				apply_key(&ctx.g.input, ctx.event.key.value, true);
-			case rgfw::EventType.KEY_RELEASED:
+			case KEY_RELEASED:
 				apply_key(&ctx.g.input, ctx.event.key.value, false);
 			default:
 		}
@@ -1360,12 +1360,12 @@ fn int main(int argc, char** args) {
 	rgfw::Surface* surface;
 	$if (env::LINUX):
 		if (rgfw::using_wayland()) {
-			surface = rgfw::create_surface((char*)buffer, ...(IVec2)screen_size, rgfw::Format.RGBA8);
+			surface = rgfw::create_surface((char*)buffer, ...(IVec2)screen_size, RGBA8);
 		} else {
-			surface = rgfw::window_create_surface(win, (char*)buffer, ...screen_size, rgfw::Format.RGBA8);
+			surface = rgfw::window_create_surface(win, (char*)buffer, ...screen_size, RGBA8);
 		}
 	$else
-		surface = rgfw::window_create_surface(win, (char*)buffer, ...screen_size, rgfw::Format.RGBA8);
+		surface = rgfw::window_create_surface(win, (char*)buffer, ...screen_size, RGBA8);
 	$endif
 	if (!surface) { io::printn("Failed to create surface!"); return 1; }
 	$if (!env::WASM):
@@ -1389,7 +1389,7 @@ fn int main(int argc, char** args) {
 		g.is_started = true;
 		g.load_best_score();
 		g.init(true);
-		g.scale = (float)screen_size.y / 4.0f;
+		g.scale = screen_size.y / 4.0f;
 
 		rgfw::Event event;
 
@@ -1406,19 +1406,19 @@ fn int main(int argc, char** args) {
 
 			while (rgfw::window_check_event(win, &event)) {
 				switch (event.type) {
-					case rgfw::EventType.QUIT: break MAINLOOP;
-					case rgfw::EventType.FOCUS_IN: g.is_focused = true;
-					case rgfw::EventType.FOCUS_OUT: g.is_focused = false;
-					case rgfw::EventType.MOUSE_BUTTON_PRESSED:
+					case QUIT: break MAINLOOP;
+					case FOCUS_IN: g.is_focused = true;
+					case FOCUS_OUT: g.is_focused = false;
+					case MOUSE_BUTTON_PRESSED:
 						if (!g.is_started) g.is_started = true;
 						g.is_focused = true;
-					case rgfw::EventType.KEY_PRESSED:
+					case KEY_PRESSED:
 						if (!g.is_started) g.is_started = true;
 						g.is_focused = true;
-						if (event.key.value == rgfw::Key.ESCAPE) break MAINLOOP;
-						if (event.key.value == rgfw::Key.P) g.paused = !g.paused;
+						if (event.key.value == ESCAPE) break MAINLOOP;
+						if (event.key.value == P) g.paused = !g.paused;
 						apply_key(&g.input, event.key.value, true);
-					case rgfw::EventType.KEY_RELEASED:
+					case KEY_RELEASED:
 						apply_key(&g.input, event.key.value, false);
 					default:
 				}
