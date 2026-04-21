@@ -1,6 +1,7 @@
 module miniaudio;
 
-constdef Format : int {
+constdef Format : int
+{
 	UNKNOWN = 0,
 	U8      = 1,
 	S16     = 2,
@@ -9,29 +10,34 @@ constdef Format : int {
 	F32     = 5
 }
 
-constdef DeviceType : int {
+constdef DeviceType : int
+{
 	PLAYBACK = 1,
 	CAPTURE  = 2,
 	DUPLEX   = 3,
 	LOOPBACK = 4
 }
 
-constdef Result : int {
-	SUCCESS = 0,
+constdef Result : int
+{
+	SUCCESS =  0,
 	ERROR   = -1,
 }
 
 alias DataCallback = fn void(Device* pDevice, void* pOutput, void* pInput, uint frameCount) @callconv("cdecl");
 
-struct Device @if(env::WASM) @align(16) {
+struct Device @if(env::WASM) @align(16)
+{
 	char[3136] data;
 }
 
-struct Device @if(!env::WASM) {
+struct Device @if(!env::WASM)
+{
 	char[3776] data;
 }
 
-struct DeviceConfigPlayback @if(env::WASM) {
+struct DeviceConfigPlayback @if(env::WASM)
+{
 	void* pDeviceID;
 	Format format;
 	uint channels;
@@ -41,7 +47,8 @@ struct DeviceConfigPlayback @if(env::WASM) {
 	int shareMode;
 }
 
-struct DeviceConfig @if(env::WASM) @align(16) {
+struct DeviceConfig @if(env::WASM) @align(16)
+{
 	DeviceType deviceType;
 	uint sampleRate;
 	uint periodSizeInFrames;
@@ -61,7 +68,8 @@ struct DeviceConfig @if(env::WASM) @align(16) {
 	char[116] _tail;
 }
 
-struct DeviceConfigPlayback @if(!env::WASM) {
+struct DeviceConfigPlayback @if(!env::WASM)
+{
 	void* pDeviceID;
 	Format format;
 	uint channels;
@@ -72,7 +80,8 @@ struct DeviceConfigPlayback @if(!env::WASM) {
 	uint _padding;
 }
 
-struct DeviceConfig @if(!env::WASM) {
+struct DeviceConfig @if(!env::WASM)
+{
 	DeviceType deviceType;
 	uint sampleRate;
 	uint periodSizeInFrames;

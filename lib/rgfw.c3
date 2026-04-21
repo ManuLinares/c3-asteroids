@@ -1,10 +1,10 @@
 module rgfw;
 
-/**
- * RGFW Bindings for C3
- */
+/* *
+ * RGFW Bindings for C3 */
 
-constdef EventType : char {
+constdef EventType : char
+{
 	NONE = 0,
 	KEY_PRESSED,
 	KEY_RELEASED,
@@ -34,123 +34,135 @@ constdef EventType : char {
 // Opaque window handle
 typedef Window = void;
 
-constdef Key : char {
-	NULL = 0,
-	ESCAPE = 27,
-	BACKTICK = 96,
-	K_0 = 48,
-	K_1 = 49,
-	K_2 = 50,
-	K_3 = 51,
-	K_4 = 52,
-	K_5 = 53,
-	K_6 = 54,
-	K_7 = 55,
-	K_8 = 56,
-	K_9 = 57,
-	MINUS = 45,
-	EQUALS = 61,
-	BACKSPACE = 8,
-	TAB = 9,
-	SPACE = 32,
-	A = 97,
-	B = 98,
-	C = 99,
-	D = 100,
-	E = 101,
-	F = 102,
-	G = 103,
-	H = 104,
-	I = 105,
-	J = 106,
-	K = 107,
-	L = 108,
-	M = 109,
-	N = 110,
-	O = 111,
-	P = 112,
-	Q = 113,
-	R = 114,
-	S = 115,
-	T = 116,
-	U = 117,
-	V = 118,
-	W = 119,
-	X = 120,
-	Y = 121,
-	Z = 122,
-	PERIOD = 46,
-	COMMA = 44,
-	SLASH = 47,
-	BRACKET = 91,
+constdef Key : char
+{
+	NULL          = 0,
+	ESCAPE        = 27,
+	BACKTICK      = 96,
+	K_0           = 48,
+	K_1           = 49,
+	K_2           = 50,
+	K_3           = 51,
+	K_4           = 52,
+	K_5           = 53,
+	K_6           = 54,
+	K_7           = 55,
+	K_8           = 56,
+	K_9           = 57,
+	MINUS         = 45,
+	EQUALS        = 61,
+	BACKSPACE     = 8,
+	TAB           = 9,
+	SPACE         = 32,
+	A             = 97,
+	B             = 98,
+	C             = 99,
+	D             = 100,
+	E             = 101,
+	F             = 102,
+	G             = 103,
+	H             = 104,
+	I             = 105,
+	J             = 106,
+	K             = 107,
+	L             = 108,
+	M             = 109,
+	N             = 110,
+	O             = 111,
+	P             = 112,
+	Q             = 113,
+	R             = 114,
+	S             = 115,
+	T             = 116,
+	U             = 117,
+	V             = 118,
+	W             = 119,
+	X             = 120,
+	Y             = 121,
+	Z             = 122,
+	PERIOD        = 46,
+	COMMA         = 44,
+	SLASH         = 47,
+	BRACKET       = 91,
 	CLOSE_BRACKET = 93,
-	SEMICOLON = 59,
-	APOSTROPHE = 39,
-	BACKSLASH = 92,
-	RETURN = 10,
-	DELETE = 127,
-	UP = 162,
-	DOWN = 163,
-	LEFT = 164,
-	RIGHT = 165
+	SEMICOLON     = 59,
+	APOSTROPHE    = 39,
+	BACKSLASH     = 92,
+	RETURN        = 10,
+	DELETE        = 127,
+	UP            = 162,
+	DOWN          = 163,
+	LEFT          = 164,
+	RIGHT         = 165
 }
 
-constdef Keymod : char {
-	CAPS_LOCK = 1,
-	NUM_LOCK = 2,
-	CONTROL = 4,
-	ALT = 8,
-	SHIFT = 16,
-	SUPER = 32,
+constdef Keymod : char
+{
+	CAPS_LOCK   = 1,
+	NUM_LOCK    = 2,
+	CONTROL     = 4,
+	ALT         = 8,
+	SHIFT       = 16,
+	SUPER       = 32,
 	SCROLL_LOCK = 64
 }
 
-constdef MouseButton : char {
+constdef MouseButton : char
+{
 	LEFT = 0,
 	MIDDLE,
 	RIGHT,
-	MISC1, MISC2, MISC3, MISC4, MISC5
+	MISC1,
+	MISC2,
+	MISC3,
+	MISC4,
+	MISC5
 }
 
-constdef WindowFlags : uint {
-	NO_BORDER = 1,
-	NO_RESIZE = 2,
-	ALLOW_DND = 4,
-	HIDE_MOUSE = 8,
-	FULLSCREEN = 16,
-	TRANSPARENT = 32,
-	CENTER = 64,
+constdef WindowFlags : uint
+{
+	NO_BORDER        = 1,
+	NO_RESIZE        = 2,
+	ALLOW_DND        = 4,
+	HIDE_MOUSE       = 8,
+	FULLSCREEN       = 16,
+	TRANSPARENT      = 32,
+	CENTER           = 64,
 	SCALE_TO_MONITOR = 256,
-	HIDE = 512,
-	MAXIMIZE = 1024,
-	CENTER_CURSOR = 2048,
-	FLOATING = 4096,
-	FOCUS_ON_SHOW = 8192,
-	MINIMIZE = 16384,
-	FOCUS = 32768,
-	OPENGL = 131072,
-	EGL = 262144
+	HIDE             = 512,
+	MAXIMIZE         = 1024,
+	CENTER_CURSOR    = 2048,
+	FLOATING         = 4096,
+	FOCUS_ON_SHOW    = 8192,
+	MINIMIZE         = 16384,
+	FOCUS            = 32768,
+	OPENGL           = 131072,
+	EGL              = 262144
 }
 
-struct CommonEvent {
+struct CommonEvent
+{
 	EventType type;
 	Window* win;
 }
 
-struct MouseButtonEvent {
+struct MouseButtonEvent
+{
 	EventType type;
 	Window* win;
 	char value;
 }
 
-struct MouseScrollEvent {
+struct MouseScrollEvent
+{
 	EventType type;
 	Window* win;
 	float x;
 	float y;
 }
 
-struct MousePosEvent {
+struct MousePosEvent
+{
 	EventType type;
 	Window* win;
 	int x;
@@ -159,7 +171,8 @@ struct MousePosEvent {
 	float vecY;
 }
 
-struct KeyEvent {
+struct KeyEvent
+{
 	EventType type;
 	Window* win;
 	Key value;
@@ -168,34 +181,39 @@ struct KeyEvent {
 	Keymod mod;
 }
 
-struct DataDropEvent {
+struct DataDropEvent
+{
 	EventType type;
 	Window* win;
 	char** files;
 	usz count;
 }
 
-struct DataDragEvent {
+struct DataDragEvent
+{
 	EventType type;
 	Window* win;
 	int x;
 	int y;
 }
 
-struct ScaleUpdatedEvent {
+struct ScaleUpdatedEvent
+{
 	EventType type;
 	Window* win;
 	float x;
 	float y;
 }
 
-struct MonitorMode {
+struct MonitorMode
+{
 	int w, h;
 	uint refreshRate;
 	char red, blue, green;
 }
 
-struct Monitor {
+struct Monitor
+{
 	int x, y;
 	char[128] name;
 	float scaleX, scaleY;
@@ -204,7 +222,8 @@ struct Monitor {
 	MonitorMode mode;
 }
 
-union Event {
+union Event
+{
 	EventType type;
 	CommonEvent common;
 	MouseButtonEvent button;
@@ -240,7 +259,8 @@ extern fn void window_set_name(Window* win, char* name) @cname("RGFW_window_setN
 extern fn void window_maximize(Window* win) @cname("RGFW_window_maximize");
 extern fn void window_minimize(Window* win) @cname("RGFW_window_minimize");
 extern fn void window_restore(Window* win) @cname("RGFW_window_restore");
-constdef Format : char {
+constdef Format : char
+{
 	RGB8 = 0,
 	BGR8,
 	RGBA8,
@@ -249,7 +269,8 @@ constdef Format : char {
 	ABGR8
 }
 
-struct Surface {
+struct Surface
+{
 	char* data;
 	int w, h;
 	Format format;
