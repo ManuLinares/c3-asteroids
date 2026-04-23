@@ -94,9 +94,17 @@
 			"target": "wasm32",
 			"link-libc": true,
 			"cc": "emcc"
+		},
+		"docs": {
+			"type": "prepare",
+			"exec": [
+				"c3c docgen --target linux-x64",
+				"c3c docgen --target windows-x64 --append",
+				"c3c docgen --target macos-aarch64 --append"
+			]
 		}
 	},
 	"cpu": "generic",
-	"opt": "O1",
+	"opt": "O2",
 	"debug-info": "none"
 }
