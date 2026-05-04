@@ -78,22 +78,25 @@
 			]
 		},
 		"web": {
-			"type": "prepare",
+			"type": "executable",
+			"name": "index.html",
+			"target": "emscripten",
+			"linked-libraries": [
+				"deps/RGFW_wasm/lib/libRGFW_wasm.a",
+				"deps/miniaudio_wasm/lib/libminiaudio.a"
+			],
+			"link-args": [
+				"--shell-file", "lib/shell.html",
+				"-s", "ALLOW_MEMORY_GROWTH=1",
+				"-s", "EXPORTED_RUNTIME_METHODS=['requestFullscreen','HEAPU8']",
+				"-s", "EXPORTED_FUNCTIONS=['_main','_start_web_game','_malloc','_free']",
+				"-s", "DEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['$stringToNewUTF8']",
+				"-O2"
+			],
 			"exec": [
 				"scripts/build_rgfw.sh wasm",
-				"scripts/build_miniaudio.sh wasm",
-				"c3c build web_objs",
-				"scripts/build_web.sh"
+				"scripts/build_miniaudio.sh wasm"
 			]
-		},
-		"list_objs": {
-			"type": "object-files"
-		},
-		"web_objs": {
-			"type": "object-files",
-			"target": "wasm32",
-			"link-libc": true,
-			"cc": "emcc"
 		},
 		"docs": {
 			"type": "prepare",

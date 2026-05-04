@@ -1698,12 +1698,3 @@ fn void start_web_game() @export("start_web_game")
 {
 	web_ctx.g.is_started = true;
 }
-
-
-// //////////////////////////////////////////////////////////////////////////////
-// remove this when emscripten PR gets merged
-module std::time::os @if(env::WASM && !env::WASI);
-
-extern fn double emscripten_get_now() @callconv("cdecl");
-fn Time native_timestamp() => (Time)(emscripten_get_now() * 1_000.0);
-fn Clock native_clock() => (Clock)(emscripten_get_now() * 1_000_000.0);
