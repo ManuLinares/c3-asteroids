@@ -75,8 +75,8 @@ jobs:
         run: |
           c3c build web --trust=full
 
-      - name: Generate Documentation
-        run: c3c build docs --trust=full
+      # - name: Generate Documentation
+      #   run: c3c build docs --trust=full
 
       - name: Package Release
         run: |
