@@ -39,10 +39,9 @@ jobs:
             mingw-w64
 
       - name: Install C3 Compiler
-        run: |
-          curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-linux.tar.gz | tar xz
-          # patch -p1 -d c3 < .github/stdlib.patch
-          echo "$(pwd)/c3" >> $GITHUB_PATH
+        uses: ManuLinares/setup-c3@main
+        with:
+          version: nightly
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -139,11 +138,9 @@ jobs:
           submodules: recursive
 
       - name: Install C3 Compiler
-        run: |
-          curl -L https://github.com/c3lang/c3c/releases/download/latest-prerelease-tag/c3-macos.zip -o c3-macos.zip
-          unzip c3-macos.zip
-          #  patch -p1 -d c3 < .github/stdlib.patch
-          echo "$(pwd)/c3" >> $GITHUB_PATH
+        uses: ManuLinares/setup-c3@main
+        with:
+          version: nightly
 
       - name: Build macOS Target
         run: |
